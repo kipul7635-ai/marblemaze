@@ -608,7 +608,7 @@ input[type="range"].diff-slider::-moz-range-thumb { background:var(--accent); bo
 .board-panel.dragging { cursor:grabbing; }
 .board {
   position:absolute; left:50%; top:50%; width:max-content; padding:0;
-  transform:translate(calc(-50% + var(--pan-x, 0px)), calc(-50% + var(--pan-y, 0px))) scale(var(--zoom, 1));
+  transform:translate(calc(-50% + var(--pan-x, 0px)), calc(-50% + var(--pan-y, 0px))) scale(var(--zoom, 1)) rotate(var(--spin, 0deg));
   transform-origin:center center; will-change:transform;
 }
 .grid { gap:0 !important; background:transparent !important; }
@@ -915,6 +915,13 @@ function fmt(ms) {
   const s = Math.floor(ms / 1000);
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
+
+/* ---------- grid spin state ----------
+   Once the combo reaches COMBO_MUSIC_AT the whole maze rotates about its own
+   centre. SPIN_DEG_PER_SEC is the net result of the earlier "3× slower, then
+   double it" tuning — 2/3 of the original 36°/s, i.e. one turn every 15s. */
+const SPIN_DEG_PER_SEC = 24;
+let spinAngle = 0, spinSpeed = 0, spinLastSet = null;
 
 /* ---------- tile logic ---------- */
 function openings(cell, rot) {
@@ -1300,10 +1307,10 @@ function clearCombo() {
 /* ---------- infinite progression ---------- */
 /* The accent walks around the colour wheel by HUE_STEP degrees per level.
    Combo frenzy chains levels back-to-back, which makes that walk race, so the
-   step is divided by COMBO_SPIN_SLOWDOWN while frenzy is running.
-   1.5 = the combo spin is now twice as fast as the original ÷3 setting. */
+   step is divided by COMBO_SPIN_SLOWDOWN while frenzy is running. The grid's
+   own rotation is driven separately in tickSpin below. */
 const HUE_STEP = 9;
-const COMBO_SPIN_SLOWDOWN = 1.5;
+const COMBO_SPIN_SLOWDOWN = 3;
 let huePos = 142, hueLastValue = 4;
 
 function previewDifficulty(value) {
@@ -1356,14 +1363,19 @@ function newLevel() {
 
 panel.addEventListener('click', e => {
   if (!canvasMode || !level || busy || won || dragged || suppressTileClick) return;
-  const rect = panel.getBoundingClientRect();
-  const x = (e.clientX - (innerWidth/2 + cameraX))/zoom + board.offsetWidth/2;
-  const y = (e.clientY - (innerHeight/2 + cameraY))/zoom + board.offsetHeight/2;
-  const c=Math.floor(x/T), r=Math.floor(y/T);
-  if(r<0||r>=level.rows||c<0||c>=level.cols) return;
-  const cell=level.cells[r][c]; if(cell.hole) return;
-  if(cell.locked||cell.type==='cross'){ status.textContent='That tile cannot be rotated.'; return; }
-  startClock(); cell.rot=(cell.rot+1)%4; cell.deg=cell.rot*90; drawCanvasBoard();
+  const w = board.offsetWidth, h = board.offsetHeight;
+  // Undo translate, scale and grid rotation to get board-local pixels.
+  const px = (e.clientX - (innerWidth / 2 + cameraX)) / zoom;
+  const py = (e.clientY - (innerHeight / 2 + cameraY)) / zoom;
+  const th = spinAngle * Math.PI / 180;
+  const cos = Math.cos(th), sin = Math.sin(th);
+  const lx = w / 2 + px * cos + py * sin;
+  const ly = h / 2 - px * sin + py * cos;
+  const c = Math.floor(lx / T), r = Math.floor(ly / T);
+  if (r < 0 || r >= level.rows || c < 0 || c >= level.cols) return;
+  const cell = level.cells[r][c]; if (cell.hole) return;
+  if (cell.locked || cell.type === 'cross') { status.textContent = 'That tile cannot be rotated.'; return; }
+  startClock(); cell.rot = (cell.rot + 1) % 4; cell.deg = cell.rot * 90; drawCanvasBoard();
 });
 
 gridEl.addEventListener('click', (e) => {
@@ -1645,6 +1657,31 @@ function tickMusic(dt) {
   music.el.playbackRate = COMBO_MUSIC_RATE + (1 - COMBO_MUSIC_RATE) * shape;
 }
 
+/* ---------- grid spin (per-frame) ----------
+   Eases the rotation speed up while the combo is at or above COMBO_MUSIC_AT,
+   and back down when it drops. Once the spin has bled off, the board glides
+   upright along the shortest arc so it never rests at an odd angle. */
+function tickSpin(dt) {
+  const wantSpin = comboCount >= COMBO_MUSIC_AT;
+  const targetSpeed = wantSpin ? SPIN_DEG_PER_SEC : 0;
+  spinSpeed += (targetSpeed - spinSpeed) * Math.min(1, dt / 250);
+  spinAngle += spinSpeed * dt / 1000;
+
+  if (!wantSpin && Math.abs(spinSpeed) < 0.1) {
+    // Wrap to [-180, 180] so we always unwind the short way.
+    let a = ((spinAngle + 180) % 360 + 360) % 360 - 180;
+    a *= Math.pow(0.9, dt / 16.7);
+    if (Math.abs(a) < 0.08) { a = 0; spinSpeed = 0; }
+    spinAngle = a;
+  }
+
+  const rounded = Math.round(spinAngle * 100) / 100;
+  if (rounded !== spinLastSet) {
+    board.style.setProperty('--spin', rounded + 'deg');
+    spinLastSet = rounded;
+  }
+}
+
 /* ---------- beat visualiser + vignette ----------
    Two spectrum strips fed by the analyser above — one hugging the bottom edge,
    one mirrored at the top so its bars hang downwards. Each kick drum fires a
@@ -1765,6 +1802,7 @@ function musicFrame(now) {
   musicLast = now;
   tickMusic(dt);
   vizTick(dt, now);
+  tickSpin(dt);
   requestAnimationFrame(musicFrame);
 }
 requestAnimationFrame(musicFrame);
