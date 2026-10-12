@@ -567,6 +567,167 @@
     .pipe, button, .status { transition: none; }
     .cell.nope, .cup.hit, .cell.solved { animation: none; }
   }
+
+/* ---------- dark abstract camera redesign ---------- */
+:root { --ink:#e8f4d0; --ink-soft:#9aa98a; --accent:#a5d84b; --accent-hi:#e5ff9b; --accent-lo:#42651c; --accent-ink:#d7ff85; }
+html, body { width:100%; height:100%; overflow:hidden; }
+body {
+  display:block; padding:0; min-height:100%; overflow:hidden;
+  background:#030503; color:#e9f4d8; font-family:Arial, Helvetica, sans-serif;
+}
+.sky { display:none; }
+.app { position:static; width:100%; max-width:none; border:0; border-radius:0; background:none; box-shadow:none; backdrop-filter:none; -webkit-backdrop-filter:none; }
+.app::before { display:none; }
+.window-body { padding:0; }
+header { position:fixed; z-index:20; top:18px; left:20px; right:20px; margin:0; text-align:left; pointer-events:none; }
+.brand { display:none; }
+.difficulty {
+  position:fixed; z-index:31; top:62px; left:12px; width:min(290px, calc(100vw - 24px));
+  margin:0; padding:15px; max-width:none; border:0; border-radius:0 0 8px 8px;
+  background:#090d07; box-shadow:none; text-align:left;
+  transform:translateX(calc(-100% - 16px)); transition:transform .25s ease;
+  pointer-events:auto; touch-action:pan-y;
+}
+.difficulty.open { transform:translateX(0); pointer-events:auto; }
+/* The header is decorative, but the sliding controls must remain interactive. */
+#difficultyPanel, #difficultyPanel * { pointer-events:auto; }
+#diffSlider { position:relative; z-index:2; touch-action:pan-y; cursor:pointer; }
+.diff-header .label, .diff-ticks, .diff-desc { color:#a4b68e; }
+.diff-header .value { color:var(--accent); }
+input[type="range"].diff-slider::-webkit-slider-runnable-track { background:linear-gradient(90deg,var(--accent) 0%,var(--accent) calc(var(--p)*100%),#22291d calc(var(--p)*100%),#22291d 100%); box-shadow:none; }
+input[type="range"].diff-slider::-moz-range-track { background:#22291d; box-shadow:none; }
+input[type="range"].diff-slider::-moz-range-progress { background:var(--accent); }
+input[type="range"].diff-slider::-webkit-slider-thumb { background:var(--accent); border:0; box-shadow:0 0 14px var(--accent); }
+input[type="range"].diff-slider::-moz-range-thumb { background:var(--accent); border:0; box-shadow:0 0 14px var(--accent); }
+.badge { position:fixed; top:18px; right:20px; margin:0; padding:0; background:none; border:0; border-radius:0; box-shadow:none; color:var(--accent); font:11px/1.4 monospace; letter-spacing:.12em; text-shadow:none; pointer-events:none; }
+.board-panel {
+  position:fixed; inset:0; z-index:1; display:block; margin:0; max-width:none; padding:0;
+  overflow:hidden; border:0; border-radius:0; background:#030503; box-shadow:none;
+  touch-action:none; cursor:grab;
+}
+.board-panel.dragging { cursor:grabbing; }
+.board {
+  position:absolute; left:50%; top:50%; width:max-content; padding:0;
+  transform:translate(calc(-50% + var(--pan-x, 0px)), calc(-50% + var(--pan-y, 0px))) scale(var(--zoom, 1));
+  transform-origin:center center; will-change:transform;
+}
+.grid { gap:0 !important; background:transparent !important; }
+.cell {
+  border:0 !important; border-radius:0 !important; box-shadow:none !important;
+  background:transparent !important; outline:none !important; outline-offset:0; padding:0 !important; margin:0 !important;
+}
+.cell:hover:not(:disabled) { background:transparent !important; }
+.cell.locked { background:transparent !important; }
+.cell.hole { background:transparent !important; border:0 !important; box-shadow:none !important; outline:none !important; }
+.pipe-line { fill:none; stroke:var(--accent); stroke-width:24; stroke-linecap:butt; stroke-linejoin:miter; }
+.cell.locked .pipe-line { stroke:#777d77; }
+/* Render pipe strokes only: no tile, hole, or grid-cell surfaces. */
+.cell, .cell.locked, .cell.hole { background:transparent !important; border:0 !important; box-shadow:none !important; outline:0 !important; }
+.chute { border:0; border-radius:0; background:var(--accent); box-shadow:0 0 18px var(--accent); }
+.cup { border:0; border-radius:0; background:var(--accent); box-shadow:0 0 24px var(--accent); }
+.marble { border-radius:50% !important; border:0; background:var(--accent-hi); box-shadow:0 0 20px var(--accent); }
+.cell.solved { background:transparent !important; outline:0 !important; box-shadow:none !important; animation:none !important; }
+.cell.solved .pipe-line { stroke:#fff !important; filter:none !important; stroke-width:24; }
+.chute.victory, .cup.victory { background:#fff !important; box-shadow:none !important; filter:none !important; }
+.cell.solved::after { content:none !important; }
+
+.lock, .lock svg { display:none !important; }
+/* Hard-edged, opaque interface throughout */
+*, *::before, *::after { border-radius:0 !important; }
+.difficulty { background:#090d07; }
+.control-new { display:none; position:fixed; z-index:50; left:50%; top:62%; transform:translate(-50%,-50%); margin:0; padding:14px 20px; color:#fff; background:#080b07; border:0; width:auto; min-width:150px; text-align:center; font-size:13px; letter-spacing:.12em; }
+body.won .control-new { display:block; }
+.chute { background:var(--accent-hi); box-shadow:0 0 5px 1px var(--accent); }
+.chute::after { content:none !important; }
+.marble { border-radius:50% !important; border:0; background:var(--accent-hi); box-shadow:0 0 5px 1px var(--accent); }
+#difficultyPanel { max-height:calc(100vh - 90px); overflow-y:auto; }
+
+.stats {
+  position:fixed; z-index:20; left:20px; bottom:18px; margin:0; justify-content:flex-start; gap:16px;
+  pointer-events:none;
+}
+.stat { padding:0; border:0; border-radius:0; background:none; box-shadow:none; color:#e9f4d8; font:11px monospace; }
+.stat span { color:#75836a; margin-right:5px; }
+.footer-actions {
+  position:fixed; z-index:20; right:20px; bottom:16px; margin:0; gap:18px; justify-content:flex-end;
+}
+button {
+  padding:8px 0; border:0; border-radius:0; background:none; box-shadow:none;
+  color:#c9d8b8; font:11px monospace; letter-spacing:.08em; text-transform:uppercase;
+}
+button:hover:not(:disabled) { color:var(--accent); filter:none; }
+button.primary { color:var(--accent); background:none; border:0; box-shadow:none; text-shadow:none; }
+button:disabled { opacity:.35; }
+.status {
+  position:fixed; z-index:20; top:44px; left:50%; transform:translateX(-50%);
+  width:max-content; max-width:calc(100vw - 40px); min-height:0; margin:0; padding:0;
+  border:0; border-radius:0; background:none; box-shadow:none; color:#9aa98a;
+  font:11px/1.5 monospace; text-align:center;
+}
+.status::before { display:none; }
+/* Last-level recap persists while the next Frenzy level starts instantly. */
+.level-recap {
+  position:fixed; z-index:22; top:42px; right:20px; max-width:min(260px, 55vw);
+  color:#d8e6c8; font:10px/1.5 monospace; letter-spacing:.035em; text-align:right;
+  opacity:.82; pointer-events:none; white-space:normal;
+}
+.level-recap:empty { display:none; }
+.status.win, .status.lose { background:none; }
+#panelToggle, #zoomControls {
+  position:fixed; z-index:40; margin:0; padding:8px 10px; background:#090d07;
+  color:#b8cba2; border:0; box-shadow:none; border-radius:0; font:11px monospace;
+}
+#panelToggle { top:18px; left:20px; }
+#zoomControls { right:20px; top:58px; display:flex; gap:14px; align-items:center; }
+#zoomControls button { padding:0; font-size:16px; min-width:18px; }
+@media (max-width:620px) {
+  .badge { top:23px; right:14px; font-size:9px; max-width:42vw; text-align:right; }
+  .level-recap { top:43px; right:14px; max-width:58vw; font-size:9px; }
+  #panelToggle { top:16px; left:14px; }
+  #zoomControls { top:54px; right:14px; }
+  .status { top:auto; bottom:58px; font-size:10px; }
+  .stats { left:14px; bottom:18px; gap:10px; }
+  .footer-actions { right:14px; bottom:12px; gap:12px; }
+  .stat { font-size:10px; }
+}
+
+#pipeCanvas { position:absolute; left:0; top:0; display:none; pointer-events:none; }
+/* Performance: remove the decorative scenery; the maze view contains only pipe strokes. */
+.sky { display:none !important; }
+.board-panel, .board, .grid { background:transparent !important; box-shadow:none !important; }
+.grid { gap:0 !important; }
+.cell, .cell.locked, .cell.hole { background:transparent !important; border:0 !important; outline:0 !important; box-shadow:none !important; }
+/* The victory action is an independent screen-space control, never part of the maze camera. */
+.control-new { pointer-events:auto !important; }
+body.won .control-new {
+  display:block;
+  position:fixed;
+  left:50%; top:62%;
+  z-index:1000;
+  transform:translate(-50%,-50%);
+  padding:14px 20px;
+  color:#fff;
+  background:#080b07;
+  border:0;
+  box-shadow:none;
+  cursor:pointer;
+}
+
+#speedBtn { display:none; position:fixed; left:50%; bottom:calc(56px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:1200; border:1px solid color-mix(in srgb, var(--accent) 70%, transparent); border-radius:2px; background:rgba(8,11,7,.88); color:var(--accent-hi); padding:6px 12px; font:inherit; font-size:10px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; cursor:pointer; touch-action:manipulation; opacity:.88; }
+#speedBtn.active { opacity:1; }
+body.frenzy-mode #speedBtn.visible { display:block; }
+#speedBtn.active { color:#fff; background:var(--accent); }
+/* Main action sits at the bottom center; Speed Up floats just above it. */
+#dropBtn { position:fixed; left:50%; bottom:calc(12px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:1150; margin:0; padding:7px 12px; font-size:10px; letter-spacing:.12em; white-space:nowrap; }
+#dropBtn:disabled { opacity:.45; }
+#comboBar { display:none; position:fixed; left:50%; top:62%; transform:translateX(-50%); z-index:1100; width:min(104px,30vw); padding:0; box-sizing:border-box; flex-direction:column; align-items:center; gap:5px; color:#fff; background:transparent; border:0; box-shadow:none; font-weight:700; letter-spacing:.04em; pointer-events:none; }
+#comboBar.visible { display:flex; animation:comboIn .18s ease-out; }
+#comboTrack { position:relative; order:0; width:100%; height:3px; overflow:hidden; background:rgba(255,255,255,.18); border-radius:2px; }
+#comboFill { height:100%; width:100%; background:var(--accent-hi); transform-origin:left center; }
+#comboText { order:1; font-size:11px; line-height:1.2; color:rgba(255,255,255,.9); }
+.combo-note { display:none; }
+@keyframes comboIn { from { opacity:0 } to { opacity:1 } }
+@media (prefers-reduced-motion: reduce) { #comboBar.visible { animation:none; } }
 </style>
 </head>
 <body>
@@ -586,6 +747,15 @@
   <span class="bubble" style="--x:93%; --s:38px; --d:27s; --delay:-23s; --ry:-38vh"></span>
 </div>
 
+<button id="newBtn" class="control-new" type="button">New level</button>
+<button id="speedBtn" type="button" aria-label="Speed up marble">Speed up »</button>
+<div id="comboBar" aria-live="polite"><div id="comboTrack"><div id="comboFill"></div></div><span id="comboText">x3 combo</span></div>
+<div id="zoomControls" aria-label="Camera zoom">
+  <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+  <span id="zoomLabel">100%</span>
+  <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+  <button id="resetCamera" type="button" aria-label="Reset camera">⌂</button>
+</div>
 <main class="app">
   <div class="window-body">
     <header>
@@ -597,23 +767,9 @@
         </div>
       </div>
 
-      <div class="difficulty">
-        <div class="diff-header">
-          <span class="label">Difficulty</span>
-          <span class="value" id="diffValue">Normal</span>
-        </div>
-        <input type="range" id="diffSlider" class="diff-slider" min="0" max="4" step="1" value="1" aria-label="Difficulty">
-        <div class="diff-ticks">
-          <span>Easy</span>
-          <span>Normal</span>
-          <span>Hard</span>
-          <span>Extreme</span>
-          <span>Insane</span>
-        </div>
-        <div class="diff-desc" id="diffDesc"></div>
-      </div>
 
       <div class="badge" id="badge">Loading…</div>
+      <div class="level-recap" id="levelRecap" aria-live="polite"></div>
     </header>
 
     <div class="board-panel" id="panel">
@@ -629,7 +785,6 @@
 
     <div class="footer-actions">
       <button id="dropBtn" class="primary">Drop marble</button>
-      <button id="newBtn">New level</button>
     </div>
 
     <div class="status" id="status" aria-live="polite">Rotate the tiles to build a route, then drop a marble.</div>
@@ -639,28 +794,48 @@
 <script>
 const DR = [-1, 0, 1, 0];   // sides: 0 top, 1 right, 2 bottom, 3 left
 const DC = [0, 1, 0, -1];
-const G = 4;                // gap between tiles (px)
+const G = 0;                // tile spacing: zero to match the angular, seamless board
 
-const DIFFICULTIES = [
-  { name: 'Easy',    rows: 5,  cols: 5,  holeRadii: [0.5],                   locked: 0,   pathLen: 11,  desc: 'Small grid, a tiny hole, short route' },
-  { name: 'Normal',  rows: 6,  cols: 6,  holeRadii: [1, 0.5],                locked: 3,   pathLen: 16,  desc: 'Bigger grid, a few holes, a few locked tiles' },
-  { name: 'Hard',    rows: 9,  cols: 9,  holeRadii: [2, 1.5, 1, 0.5],        locked: 15,  pathLen: 38,  desc: 'Huge grid, huge holes, very long route' },
-  { name: 'Extreme', rows: 18, cols: 18, holeRadii: [3, 2, 1.5, 1, 0.5],     locked: 40,  pathLen: 90,  desc: 'Massive grid, sprawling holes, marathon route' },
-  { name: 'Insane',  rows: 50, cols: 50, holeRadii: [6, 5, 4, 3, 2, 1],      locked: 150, pathLen: 220, desc: 'Gigantic 50×50 grid — a true marble marathon' },
-];
+// The board starts with value 4 (2×2). Each victory adds one point;
+// all points above the four-cell base are randomly assigned to height or width.
+let boardValue = 4;
+function comboWindowMs() { return 60000 + Math.max(0, boardValue - 4) * 2000; }
+function configForValue(value) {
+  const extra = Math.max(0, value - 4);
+  const extraRows = rnd(extra + 1);
+  const rows = 2 + extraRows;
+  const cols = 2 + extra - extraRows;
+  const area = rows * cols;
+  const holeRadii = [];
+  if (value >= 7) holeRadii.push(0.5);
+  if (value >= 10) holeRadii.push(1);
+  if (value >= 15) holeRadii.push(1.5);
+  if (value >= 22) holeRadii.push(2);
+  if (value >= 32) holeRadii.push(3);
+  if (value >= 48) holeRadii.push(4);
+  if (value >= 70) holeRadii.push(5);
+  const locked = value < 7 ? 0 : Math.min(Math.floor(area * Math.min(0.22, (value - 5) * 0.006)), Math.max(0, area - 5));
+  return { name: 'Value ' + value, value, rows, cols, holeRadii, locked,
+    pathLen: Math.max(3, Math.min(area, Math.round((rows + cols) * (0.8 + Math.min(value, 40) / 40)))) };
+}
 const COLORS = ['#22b573', '#1e90e6', '#ee9a00', '#f0622a', '#e5365f'];
-
-const diffSlider = document.getElementById('diffSlider');
-const diffValue  = document.getElementById('diffValue');
-const diffDesc   = document.getElementById('diffDesc');
 const badge      = document.getElementById('badge');
+const levelRecap = document.getElementById('levelRecap');
 const panel      = document.getElementById('panel');
 const board      = document.getElementById('board');
 const gridEl     = document.getElementById('grid');
+const pipeCanvas = document.createElement('canvas'); pipeCanvas.id = 'pipeCanvas';
+const pipeCtx = pipeCanvas.getContext('2d', { alpha: true, desynchronized: true });
+let canvasMode = false;
 const timeEl     = document.getElementById('timeEl');
 const marblesEl  = document.getElementById('marblesEl');
 const dropBtn    = document.getElementById('dropBtn');
 const newBtn     = document.getElementById('newBtn');
+const speedBtn   = document.getElementById('speedBtn');
+const comboBar   = document.getElementById('comboBar');
+const comboText  = document.getElementById('comboText');
+const comboFill  = document.getElementById('comboFill');
+let comboCount = 0, frenzy = false, speedMultiplier = 1, frenzyTimer = null, speedBoostTimer = null, speedBoostUntil = 0;
 const status     = document.getElementById('status');
 
 const chute  = Object.assign(document.createElement('div'), { className: 'chute' });
@@ -668,6 +843,7 @@ const cup    = Object.assign(document.createElement('div'), { className: 'cup' }
 const marble = Object.assign(document.createElement('div'), { className: 'marble' });
 
 let level = null, T = 60, M = 26;
+let lastRunPath = [];
 let busy = false, won = false, marbles = 0, runId = 0;
 let solvedTimeouts = [];
 
@@ -813,7 +989,7 @@ function assemble(cfg, holes, target, start, path) {
     const cell = cells[r][c];
     if (!cell.locked && cell.type !== 'cross') eligible.push(cell);
   }
-  if (eligible.length < 3) return null;
+  if (eligible.length < Math.min(3, path.length)) return null;
   const wrongize = cell => {
     cell.rot = cell.type === 'straight' ? cell.solRot ^ 1 : (cell.solRot + 1 + rnd(3)) % 4;
   };
@@ -841,8 +1017,8 @@ function generateLevel(cfg) {
   const { rows, cols } = cfg;
   const area = rows * cols;
   // Cap inner path samples for huge grids so generation stays snappy.
-  const samples = Math.max(6, Math.min(40, Math.round(6000 / Math.max(1, area))));
-  const attempts = area > 400 ? 120 : 400;
+  const samples = area >= 2500 ? 3 : area > 400 ? 8 : Math.max(6, Math.min(24, Math.round(3000 / Math.max(1, area))));
+  const attempts = area >= 2500 ? 28 : area > 400 ? 70 : 220;
   for (let attempt = 0; attempt < attempts; attempt++) {
     const start  = { r: 0, c: rnd(cols) };   // random drop column
     const target = rnd(cols);
@@ -867,33 +1043,48 @@ function generateLevel(cfg) {
 
 /* ---------- rendering ---------- */
 function pipeSvg(type) {
-  const d = type === 'straight' ? '<path d="M50 0V100"/>'
-          : type === 'curve'    ? '<path d="M50 0Q50 50 100 50"/>'
-          : '<path d="M50 0V100"/><path d="M0 50H100"/>';
-  return '<svg class="pipe" viewBox="0 0 100 100" aria-hidden="true"><g class="edge">' + d
-    + '</g><g class="mid">' + d + '</g><g class="shine">' + d + '</g></svg>';
+  // One crisp, angular stroke per pipe: fewer SVG nodes and no curved elbows.
+  const d = type === 'straight' ? 'M50 0V100'
+          : type === 'curve'    ? 'M50 0V50H100'
+          : 'M50 0V100 M0 50H100';
+  return '<svg class="pipe" viewBox="0 0 100 100" aria-hidden="true"><path class="pipe-line" d="' + d + '"/></svg>';
 }
-const LOCK_SVG = '<span class="lock"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="2" fill="#5d7487"/>'
-  + '<path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="#5d7487" stroke-width="1.8"/></svg></span>';
-
 function buildBoard() {
+  canvasMode = true;
+  if (canvasMode) {
+    // A single canvas replaces thousands of buttons and SVG nodes on the largest boards.
+    gridEl.replaceChildren();
+    if (chute.parentNode !== board) board.append(chute, cup, marble);
+    gridEl.style.display = 'none';
+    board.style.width = (level.cols * T) + 'px';
+    board.style.height = (level.rows * T) + 'px';
+    pipeCanvas.width = level.cols * T;
+    pipeCanvas.height = level.rows * T;
+    pipeCanvas.style.width = pipeCanvas.width + 'px';
+    pipeCanvas.style.height = pipeCanvas.height + 'px';
+    board.appendChild(pipeCanvas);
+    pipeCanvas.style.display = 'block';
+    level.cells.forEach((row,r) => row.forEach((cell,c) => { cell.el = null; }));
+    fit(); drawCanvasBoard();
+    return;
+  }
+  pipeCanvas.style.display = 'none';
+  if (chute.parentNode !== gridEl) gridEl.append(chute, cup, marble);
+  gridEl.style.display = 'grid';
+  board.style.width = 'max-content'; board.style.height = 'auto';
   const nodes = [];
   level.cells.forEach((row, r) => row.forEach((cell, c) => {
     let el;
-    if (cell.hole) {
-      el = document.createElement('div');
-      el.className = 'cell hole';
-    } else {
+    if (cell.hole) { el = document.createElement('div'); el.className = 'cell hole'; }
+    else {
       el = document.createElement('button');
       el.className = 'cell' + (cell.locked ? ' locked' : '') + (cell.type === 'cross' ? ' fixed' : '');
       el.dataset.r = r; el.dataset.c = c;
-      el.setAttribute('aria-label', 'Row ' + (r + 1) + ', column ' + (c + 1) + ', ' + cell.type
-        + (cell.locked ? ', locked' : cell.type === 'cross' ? ', fixed' : ', tap to rotate'));
-      el.innerHTML = pipeSvg(cell.type) + (cell.locked ? LOCK_SVG : '');
+      el.setAttribute('aria-label', 'Row ' + (r + 1) + ', column ' + (c + 1) + ', ' + cell.type + (cell.locked ? ', locked' : cell.type === 'cross' ? ', fixed' : ', tap to rotate'));
+      el.innerHTML = pipeSvg(cell.type);
       if (cell.type !== 'cross') el.firstChild.style.transform = 'rotate(' + cell.deg + 'deg)';
     }
-    cell.el = el;
-    nodes.push(el);
+    cell.el = el; nodes.push(el);
   }));
   board.style.setProperty('--cols', level.cols);
   board.style.setProperty('--gap', G + 'px');
@@ -901,25 +1092,131 @@ function buildBoard() {
   fit();
 }
 
+function drawCanvasBoard() {
+  if (!canvasMode || !level) return;
+  const ctx = pipeCtx, dpr = Math.min(1.5, window.devicePixelRatio || 1);
+  const w = level.cols * T, h = level.rows * T;
+  if (pipeCanvas.width !== Math.round(w*dpr) || pipeCanvas.height !== Math.round(h*dpr)) {
+    pipeCanvas.width = Math.round(w*dpr); pipeCanvas.height = Math.round(h*dpr);
+    pipeCanvas.style.width = w+'px'; pipeCanvas.style.height = h+'px';
+  }
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#ee9a00';
+  const solved = new Set(lastRunPath.map(([r,c])=>r+','+c));
+  ctx.lineWidth = Math.max(2,T*.24); ctx.lineCap='butt'; ctx.lineJoin='miter';
+  level.cells.forEach((row,r)=>row.forEach((cell,c)=>{
+    if(cell.hole) return;
+    const x=c*T, y=r*T, cx=x+T/2, cy=y+T/2;
+    ctx.strokeStyle = solved.has(r+','+c) && won ? '#fff' : cell.locked ? '#777d77' : accent;
+    ctx.beginPath();
+    if(cell.type==='cross') { ctx.moveTo(cx, y); ctx.lineTo(cx,y+T); ctx.moveTo(x,cy); ctx.lineTo(x+T,cy); }
+    else if(cell.type==='straight') {
+      if(cell.rot%2===0){ctx.moveTo(cx,y);ctx.lineTo(cx,y+T);} else {ctx.moveTo(x,cy);ctx.lineTo(x+T,cy);}
+    } else {
+      const a=cell.rot%4, b=(a+1)%4;
+      const pos=d=>({x:cx+DC[d]*T/2,y:cy+DR[d]*T/2});
+      const A=pos(a),B=pos(b); ctx.moveTo(A.x,A.y); ctx.lineTo(cx,cy); ctx.lineTo(B.x,B.y);
+    }
+    ctx.stroke();
+  }));
+}
+
 function fit() {
   if (!level) return;
-  const avail = panel.clientWidth - 24;
-  // Allow very small tiles for huge grids so the whole board still fits.
-  T = Math.max(8, Math.min(64, Math.floor((avail - (level.cols - 1) * G) / level.cols)));
-  M = Math.max(3, Math.round(T * .46));
+  // Keep the maze as a stable world; camera controls change the view, not its geometry.
+  T = window.innerWidth < 620 ? 44 : 60;
+  M = 18 / zoom; // counter-scale in world space so it stays ~18 screen pixels at every zoom
   board.style.setProperty('--tile', T + 'px');
+  if (canvasMode) { board.style.width=(level.cols*T)+'px'; board.style.height=(level.rows*T)+'px'; drawCanvasBoard(); }
   marble.style.setProperty('--m', M + 'px');
-  chute.style.left = (level.start.c * (T + G) + T * .28) + 'px';
+  chute.style.left = (level.start.c * (T + G) + (T - T * .44) / 2) + 'px';
   cup.style.left = (level.target * (T + G) + T * .08) + 'px';
+  updateCamera();
 }
 window.addEventListener('resize', () => { if (!busy) fit(); });
+
+/* ---------- camera / floating controls ---------- */
+let cameraX = 0, cameraY = 0, zoom = 1, drag = null, dragged = false;
+function updateCamera() {
+  board.style.setProperty('--pan-x', cameraX + 'px');
+  board.style.setProperty('--pan-y', cameraY + 'px');
+  board.style.setProperty('--zoom', zoom);
+  M = 18 / zoom;
+  marble.style.setProperty('--m', M + 'px');
+  const label = document.getElementById('zoomLabel');
+  if (label) label.textContent = Math.round(zoom * 100) + '%';
+}
+function changeZoom(mult) { zoom = Math.max(.15, Math.min(3.5, zoom * mult)); updateCamera(); }
+document.getElementById('zoomIn').addEventListener('click', () => changeZoom(1.2));
+document.getElementById('zoomOut').addEventListener('click', () => changeZoom(1/1.2));
+document.getElementById('resetCamera').addEventListener('click', () => { cameraX=0; cameraY=0; zoom=1; updateCamera(); });
+const activePointers = new Map();
+let pinch = null;
+const pointDistance = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+const pointMid = (a,b) => ({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
+panel.addEventListener('pointerdown', e => {
+  activePointers.set(e.pointerId, {x:e.clientX,y:e.clientY});
+  try { panel.setPointerCapture(e.pointerId); } catch (_) {}
+  if (activePointers.size === 2) {
+    const pts=[...activePointers.values()], mid=pointMid(pts[0],pts[1]);
+    pinch={distance:Math.max(1,pointDistance(pts[0],pts[1])), zoom, x:mid.x, y:mid.y, cx:cameraX, cy:cameraY};
+    drag=null; dragged=true;
+  } else if (activePointers.size === 1) {
+    drag={x:e.clientX,y:e.clientY,cx:cameraX,cy:cameraY,id:e.pointerId};
+    dragged=false;
+  }
+});
+panel.addEventListener('pointermove', e => {
+  if (!activePointers.has(e.pointerId)) return;
+  activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if (activePointers.size >= 2 && pinch) {
+    const pts=[...activePointers.values()].slice(0,2), mid=pointMid(pts[0],pts[1]);
+    const oldZoom=zoom;
+    zoom=Math.max(.15,Math.min(3.5,pinch.zoom*pointDistance(pts[0],pts[1])/pinch.distance));
+    const ratio=zoom/oldZoom;
+    const fx=pinch.x-innerWidth/2, fy=pinch.y-innerHeight/2;
+    cameraX=fx-(fx-pinch.cx)*ratio + (mid.x-pinch.x);
+    cameraY=fy-(fy-pinch.cy)*ratio + (mid.y-pinch.y);
+    updateCamera(); panel.classList.add('dragging'); return;
+  }
+  if (!drag || drag.id !== e.pointerId) return;
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if (Math.hypot(dx,dy)>5) { dragged=true; panel.classList.add('dragging'); }
+  if (dragged) { cameraX=drag.cx+dx; cameraY=drag.cy+dy; updateCamera(); }
+});
+function stopDrag(e) {
+  activePointers.delete(e.pointerId);
+  if (activePointers.size < 2) pinch=null;
+  if (activePointers.size === 0) {
+    drag=null; panel.classList.remove('dragging');
+    if (dragged) { suppressTileClick=true; setTimeout(()=>{suppressTileClick=false;},80); }
+    dragged=false;
+  } else if (activePointers.size === 1) {
+    const [id,pt]=[...activePointers.entries()][0];
+    drag={x:pt.x,y:pt.y,cx:cameraX,cy:cameraY,id};
+  }
+}
+panel.addEventListener('pointerup', stopDrag);
+panel.addEventListener('pointercancel', stopDrag);
+panel.addEventListener('wheel', e => {
+  e.preventDefault(); changeZoom(e.deltaY < 0 ? 1.12 : 1/1.12);
+}, {passive:false});
+let suppressTileClick=false;
 
 /* ---------- clock ---------- */
 let startAt = null, timerId = null;
 function startClock() {
   if (startAt !== null) return;
   startAt = performance.now();
-  timerId = setInterval(() => { timeEl.textContent = fmt(performance.now() - startAt); }, 200);
+  timerId = setInterval(() => {
+    const elapsed = performance.now() - startAt;
+    timeEl.textContent = fmt(elapsed);
+    if (comboCount > 0) {
+      const left = Math.max(0, 1 - elapsed / comboWindowMs());
+      comboFill.style.transform = 'scaleX(' + left + ')';
+      if (elapsed >= comboWindowMs()) clearCombo();
+    }
+  }, 100);
 }
 function stopClock() {
   if (timerId) { clearInterval(timerId); timerId = null; }
@@ -929,40 +1226,85 @@ function resetClock() {
   if (timerId) clearInterval(timerId);
   timerId = null; startAt = null; timeEl.textContent = '0:00';
 }
-
-/* ---------- difficulty ---------- */
-function previewDifficulty(idx) {
-  const d = DIFFICULTIES[idx];
-  diffValue.textContent = d.name;
-  diffDesc.textContent = d.desc;
-  diffSlider.style.setProperty('--p', idx / (DIFFICULTIES.length - 1));
-  document.documentElement.style.setProperty('--accent', COLORS[idx]);
+function clearCombo() {
+  comboCount = 0; frenzy = false;
+  document.body.classList.remove('frenzy-mode');
+  comboBar.classList.remove('visible');
+  comboFill.style.transform = 'scaleX(0)';
+  if (frenzyTimer) { clearTimeout(frenzyTimer); frenzyTimer = null; }
+  stopMusic();
 }
 
-/* ---------- play ---------- */
+/* ---------- infinite progression ---------- */
+/* The accent walks around the colour wheel by HUE_STEP degrees per level.
+   Combo frenzy chains levels back-to-back, which makes that walk race, so the
+   step is divided by COMBO_SPIN_SLOWDOWN while frenzy is running. */
+const HUE_STEP = 9;
+const COMBO_SPIN_SLOWDOWN = 3;
+let huePos = 142, hueLastValue = 4;
+
+function previewDifficulty(value) {
+  const levels = Math.max(0, value - hueLastValue);
+  const step = (frenzy ? HUE_STEP / COMBO_SPIN_SLOWDOWN : HUE_STEP) * levels;
+  huePos = ((huePos + step) % 360 + 360) % 360;
+  hueLastValue = value;
+  const hue = huePos;
+  const sat = Math.min(88, 64 + Math.floor(Math.max(0, value - 4) / 8));
+  const light = Math.max(43, 56 - Math.floor(Math.max(0, value - 4) / 12));
+  document.documentElement.style.setProperty('--accent', `hsl(${hue} ${sat}% ${light}%)`);
+  document.documentElement.style.setProperty('--correct-hi', `hsl(${(hue + 42) % 360} 85% 72%)`);
+  document.documentElement.style.setProperty('--correct-lo', `hsl(${(hue + 42) % 360} 72% 38%)`);
+}
+
 function newLevel() {
+  document.body.classList.remove('won');
   runId++;
-  busy = false; won = false; marbles = 0;
+  busy = false; won = false; marbles = 0; lastRunPath = [];
   solvedTimeouts.forEach(clearTimeout);
   solvedTimeouts = [];
   marble.style.display = 'none';
+  speedBtn.classList.remove('visible','active'); speedMultiplier = 1; speedBoostUntil = 0;
+  if (speedBoostTimer) { clearTimeout(speedBoostTimer); speedBoostTimer = null; }
+  speedBtn.textContent = 'Speed up »';
+  if (frenzyTimer) { clearTimeout(frenzyTimer); frenzyTimer = null; }
+  chute.classList.remove('victory'); cup.classList.remove('victory');
   board.classList.remove('busy');
   resetClock();
   marblesEl.textContent = '0';
-  const idx = +diffSlider.value;
-  previewDifficulty(idx);
-  level = generateLevel(DIFFICULTIES[idx]);
+  const cfg = configForValue(boardValue);
+  previewDifficulty(boardValue);
+  level = generateLevel(cfg);
   buildBoard();
-  badge.textContent = level.cols + ' × ' + level.rows + ' grid, ' + level.holeCells + (level.holeCells === 1 ? ' hole, ' : ' holes, ') + level.lockedCells + ' locked';
+  // Canvas pipes use a snapshot of the accent color, so repaint immediately on every level.
+  drawCanvasBoard();
+  cameraX = 0; cameraY = 0;
+  zoom = Math.min(1, Math.max(.15, Math.min((innerWidth * .82) / (level.cols * T), (innerHeight * .72) / (level.rows * T))));
+  updateCamera();
+  badge.textContent = 'VALUE ' + boardValue + '  ·  ' + level.cols + ' × ' + level.rows + '  ·  ' + level.holeCells + ' HOLES  ·  ' + level.lockedCells + ' LOCKED';
   dropBtn.disabled = false;
   newBtn.classList.remove('primary');
   status.className = 'status';
   status.textContent = 'Rotate the tiles to build a route, then drop a marble.';
+  if (frenzy) { document.body.classList.add('frenzy-mode'); startClock(); }
+  else document.body.classList.remove('frenzy-mode');
 }
 
+panel.addEventListener('click', e => {
+  if (!canvasMode || !level || busy || won || dragged || suppressTileClick) return;
+  const rect = panel.getBoundingClientRect();
+  const x = (e.clientX - (innerWidth/2 + cameraX))/zoom + board.offsetWidth/2;
+  const y = (e.clientY - (innerHeight/2 + cameraY))/zoom + board.offsetHeight/2;
+  const c=Math.floor(x/T), r=Math.floor(y/T);
+  if(r<0||r>=level.rows||c<0||c>=level.cols) return;
+  const cell=level.cells[r][c]; if(cell.hole) return;
+  if(cell.locked||cell.type==='cross'){ status.textContent='That tile cannot be rotated.'; return; }
+  startClock(); cell.rot=(cell.rot+1)%4; cell.deg=cell.rot*90; drawCanvasBoard();
+});
+
 gridEl.addEventListener('click', (e) => {
+  if (canvasMode) return;
   const btn = e.target.closest('button.cell');
-  if (!btn || !level || busy || won) return;
+  if (!btn || !level || busy || won || suppressTileClick) return;
   const cell = level.cells[+btn.dataset.r][+btn.dataset.c];
   if (cell.locked || cell.type === 'cross') {
     btn.classList.remove('nope'); void btn.offsetWidth; btn.classList.add('nope');
@@ -975,7 +1317,7 @@ gridEl.addEventListener('click', (e) => {
 });
 
 function buildRoute(sim) {
-  const P = T + G, pts = [];
+  const P = T, pts = [];
   const center = (r, c) => ({ x: c * P + T / 2, y: r * P + T / 2 });
   const edge = (r, c, s) => {
     const o = center(r, c), h = T / 2;
@@ -984,10 +1326,10 @@ function buildRoute(sim) {
   pts.push({ x: level.start.c * P + T / 2, y: -T * .5 });
   for (const s of sim.steps) {
     const A = edge(s.r, s.c, s.enter), C = center(s.r, s.c), B = edge(s.r, s.c, s.exit);
-    for (let i = 0; i <= 10; i++) {
-      const t = i / 10, u = 1 - t;
-      pts.push({ x: u * u * A.x + 2 * u * t * C.x + t * t * B.x, y: u * u * A.y + 2 * u * t * C.y + t * t * B.y });
-    }
+    // Follow the exact angular pipe centerline: entry → center → exit.
+    // No Bézier interpolation, so the marble never cuts across a pipe elbow.
+    if (!pts.length || pts[pts.length - 1].x !== A.x || pts[pts.length - 1].y !== A.y) pts.push(A);
+    pts.push(C, B);
   }
   const end = sim.end, last = sim.steps[sim.steps.length - 1];
   const gridH = level.rows * T + (level.rows - 1) * G;
@@ -1018,8 +1360,10 @@ function dropMarble() {
   dropBtn.disabled = true;
   status.className = 'status';
   status.textContent = 'Rolling…';
+  speedMultiplier = 1; speedBoostUntil = 0; speedBtn.classList.toggle('visible', frenzy); speedBtn.classList.remove('active');
 
   const sim = simulate(level, false);
+  lastRunPath = sim.steps.map(step => [step.r, step.c]);
   const { pts, cum, total } = buildRoute(sim);
   const id = ++runId;
   const dur = Math.max(500, Math.min(7000, total / (T / 200)));
@@ -1030,11 +1374,14 @@ function dropMarble() {
   marble.style.display = 'block';
   place(pts[0].x, pts[0].y);
 
-  const t0 = performance.now();
+  let previousFrame = performance.now();
+  let elapsed = 0;
   let seg = 1;
   function frame(now) {
     if (id !== runId) return;
-    const t = Math.min(1, (now - t0) / dur), d = t * total;
+    elapsed += Math.max(0, now - previousFrame) * speedMultiplier;
+    previousFrame = now;
+    const t = Math.min(1, elapsed / dur), d = t * total;
     while (seg < cum.length - 1 && cum[seg] < d) seg++;
     const a = pts[seg - 1], b = pts[seg];
     const u = Math.min(1, Math.max(0, (d - cum[seg - 1]) / ((cum[seg] - cum[seg - 1]) || 1)));
@@ -1059,6 +1406,7 @@ const MESSAGES = {
 };
 
 function lightUpPath(path) {
+  if (canvasMode) { drawCanvasBoard(); return; }
   // Stagger the glow so long paths cascade instead of popping all at once.
   const perTile = Math.max(10, Math.min(55, Math.floor(1400 / Math.max(1, path.length))));
   path.forEach(([r, c], i) => {
@@ -1072,27 +1420,176 @@ function lightUpPath(path) {
 
 function finishRun(kind) {
   marble.style.display = 'none';
+  speedBtn.classList.remove('visible','active'); speedMultiplier = 1; speedBoostUntil = 0;
+  if (speedBoostTimer) { clearTimeout(speedBoostTimer); speedBoostTimer = null; }
+  speedBtn.textContent = 'Speed up »';
   busy = false;
   board.classList.remove('busy');
   if (kind === 'win') {
     won = true;
+    const elapsedMs = startAt === null ? Infinity : performance.now() - startAt;
+    if (elapsedMs <= comboWindowMs()) comboCount++; else comboCount = 0;
+    levelRecap.textContent = 'LEVEL ' + boardValue + ' COMPLETE · ' + timeEl.textContent + ' · ' + marbles + (marbles === 1 ? ' MARBLE' : ' MARBLES') + (frenzy ? '' : '');
+    frenzy = comboCount >= 3;
+    syncComboMusic();
+    levelRecap.textContent = 'LEVEL ' + boardValue + ' COMPLETE · ' + timeEl.textContent + ' · ' + marbles + (marbles === 1 ? ' MARBLE' : ' MARBLES');
+    comboBar.classList.toggle('visible', frenzy);
+    comboText.textContent = 'x' + comboCount + ' combo';
+    comboFill.style.transform = 'scaleX(1)';
+    boardValue++;
+    document.body.classList.add('won');
+    if (canvasMode) drawCanvasBoard();
     stopClock();
     cup.classList.remove('hit'); void cup.offsetWidth; cup.classList.add('hit');
+    chute.classList.add('victory');
+    cup.classList.add('victory');
     status.className = 'status win';
     status.textContent = 'Solved in ' + timeEl.textContent + ' using ' + marbles + (marbles === 1 ? ' marble!' : ' marbles!');
     newBtn.classList.add('primary');
-    if (level && level.path) lightUpPath(level.path);
+    if (lastRunPath.length) lightUpPath(lastRunPath);
+    if (frenzy) {
+      status.textContent += ' · COMBO FRENZY!';
+      // Start the next board immediately; newLevel starts its clock immediately too.
+      frenzyTimer = setTimeout(() => { if (won && frenzy) newLevel(); }, 0);
+    }
   } else {
+    if (comboCount > 0 && startAt !== null && performance.now() - startAt >= comboWindowMs()) clearCombo();
     status.className = 'status lose';
     status.textContent = MESSAGES[kind];
     dropBtn.disabled = false;
   }
 }
 
-diffSlider.addEventListener('input', () => previewDifficulty(+diffSlider.value));
-diffSlider.addEventListener('change', newLevel);
+speedBtn.addEventListener('click', () => {
+  if (!busy || !frenzy) return;
+  // Every tap doubles travel speed for 40 ms; rapid taps add time to the active burst.
+  const now = performance.now();
+  speedMultiplier = 2;
+  speedBoostUntil = Math.max(now, speedBoostUntil) + 40;
+  speedBtn.classList.add('active');
+  speedBtn.textContent = 'Speeding up';
+  if (speedBoostTimer) clearTimeout(speedBoostTimer);
+  const settle = () => {
+    const remaining = speedBoostUntil - performance.now();
+    if (remaining > 0) speedBoostTimer = setTimeout(settle, remaining);
+    else {
+      speedMultiplier = 1;
+      speedBoostUntil = 0;
+      speedBtn.classList.remove('active');
+      speedBtn.textContent = 'Speed up »';
+      speedBoostTimer = null;
+    }
+  };
+  speedBoostTimer = setTimeout(settle, Math.max(1, speedBoostUntil - now));
+});
 dropBtn.addEventListener('click', dropMarble);
 newBtn.addEventListener('click', newLevel);
+
+/* ---------- combo music ----------
+   From combo 10 the track loops underneath the game. It arrives deliberately
+   lo-fi — silent, low-passed and pitched down to 0.7 — then, for as long as the
+   combo survives, it climbs to full volume, an open filter and normal speed
+   over COMBO_MUSIC_RAMP. Break the combo and it resets to the top. */
+const COMBO_MUSIC_AT    = 10;      // combo level that brings the music in
+const COMBO_MUSIC_RAMP  = 120000;  // 2 minutes from lo-fi to full fidelity
+const COMBO_MUSIC_RATE  = 0.7;     // starting playback rate
+const COMBO_MUSIC_CUT   = 320;     // starting low-pass corner (Hz)
+const COMBO_MUSIC_OPEN  = 18000;   // fully unmuffled corner (Hz)
+const COMBO_MUSIC_VOL   = 0.9;     // normal volume once the ramp finishes
+const COMBO_MUSIC_PITCH = false;   // true = hold pitch while slowing down
+
+const music = { el: null, ctx: null, src: null, lp: null, gain: null, ok: false, on: false, t: 0, stopTimer: null };
+
+function initMusic() {
+  if (music.el) return;
+  const el = new Audio('combo.mp3');
+  el.loop = true;
+  el.preload = 'auto';
+  music.el = el;
+  try {
+    el.preservesPitch = COMBO_MUSIC_PITCH;
+    el.mozPreservesPitch = COMBO_MUSIC_PITCH;
+    el.webkitPreservesPitch = COMBO_MUSIC_PITCH;
+  } catch (_) {}
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  try {
+    const ctx = new Ctx();
+    const src = ctx.createMediaElementSource(el);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = COMBO_MUSIC_CUT;
+    lp.Q.value = 0.6;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    src.connect(lp).connect(gain).connect(ctx.destination);
+    Object.assign(music, { ctx, src, lp, gain, ok: true });
+  } catch (_) { music.ok = false; }
+}
+
+function startMusic() {
+  initMusic();
+  if (!music.ok || music.on) return;
+  if (music.ctx.state === 'suspended') music.ctx.resume().catch(() => {});
+  clearTimeout(music.stopTimer);
+  const now = music.ctx.currentTime;
+  music.on = true;
+  music.t = 0;
+  music.gain.gain.cancelScheduledValues(now);
+  music.gain.gain.setValueAtTime(0, now);            // start silent
+  music.lp.frequency.cancelScheduledValues(now);
+  music.lp.frequency.setValueAtTime(COMBO_MUSIC_CUT, now); // start muffled
+  music.el.playbackRate = COMBO_MUSIC_RATE;          // start slowed
+  try { music.el.currentTime = 0; } catch (_) {}
+  const p = music.el.play();
+  if (p && p.catch) p.catch(() => {});
+}
+
+function stopMusic() {
+  if (!music.ok || !music.on) return;
+  music.on = false;
+  music.t = 0;
+  const now = music.ctx.currentTime;
+  music.gain.gain.cancelScheduledValues(now);
+  music.gain.gain.setValueAtTime(music.gain.gain.value, now);
+  music.gain.gain.setTargetAtTime(0, now, 0.05);     // short anti-click fade
+  music.lp.frequency.setValueAtTime(COMBO_MUSIC_CUT, now);
+  music.el.playbackRate = COMBO_MUSIC_RATE;
+  clearTimeout(music.stopTimer);
+  music.stopTimer = setTimeout(() => { if (!music.on) music.el.pause(); }, 260);
+}
+
+function syncComboMusic() {
+  if (comboCount >= COMBO_MUSIC_AT) startMusic(); else stopMusic();
+}
+
+function tickMusic(dt) {
+  if (!music.ok || !music.on) return;
+  music.t = Math.min(1, music.t + dt / COMBO_MUSIC_RAMP);
+  const now = music.ctx.currentTime;
+  const shape = music.t;
+  music.gain.gain.setTargetAtTime(COMBO_MUSIC_VOL * shape, now, 0.08);
+  music.lp.frequency.setTargetAtTime(
+    COMBO_MUSIC_CUT * Math.pow(COMBO_MUSIC_OPEN / COMBO_MUSIC_CUT, shape), now, 0.15);
+  music.el.playbackRate = COMBO_MUSIC_RATE + (1 - COMBO_MUSIC_RATE) * shape;
+}
+
+let musicLast = performance.now();
+function musicFrame(now) {
+  tickMusic(Math.min(250, now - musicLast));
+  musicLast = now;
+  requestAnimationFrame(musicFrame);
+}
+requestAnimationFrame(musicFrame);
+
+/* Browsers only let audio start from a gesture; warm the context up on the
+   first tap so it is already running by the time combo 10 arrives. */
+['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+  window.addEventListener(ev, () => {
+    initMusic();
+    if (music.ctx && music.ctx.state === 'suspended') music.ctx.resume().catch(() => {});
+  }, { passive: true })
+);
 
 newLevel();
 </script>
