@@ -728,6 +728,33 @@ body.frenzy-mode #speedBtn.visible { display:block; }
 .combo-note { display:none; }
 @keyframes comboIn { from { opacity:0 } to { opacity:1 } }
 @media (prefers-reduced-motion: reduce) { #comboBar.visible { animation:none; } }
+
+/* ---------- Combo flash + beat visualiser ---------- */
+#flash {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity;
+}
+#flash.fire { animation: flashOut .5s ease-out forwards; }
+@keyframes flashOut {
+  0%   { opacity: .85; }
+  100% { opacity: 0; }
+}
+
+#viz {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 3;                 /* above the maze, below every HUD control */
+  display: block;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  #flash.fire { animation-duration: .28s; }
+}
 </style>
 </head>
 <body>
@@ -746,6 +773,8 @@ body.frenzy-mode #speedBtn.visible { display:block; }
   <span class="bubble" style="--x:86%; --s:24px; --d:21s; --delay:-2s;  --ry:-56vh"></span>
   <span class="bubble" style="--x:93%; --s:38px; --d:27s; --delay:-23s; --ry:-38vh"></span>
 </div>
+
+<canvas id="viz" aria-hidden="true"></canvas>
 
 <button id="newBtn" class="control-new" type="button">New level</button>
 <button id="speedBtn" type="button" aria-label="Speed up marble">Speed up »</button>
@@ -790,6 +819,8 @@ body.frenzy-mode #speedBtn.visible { display:block; }
     <div class="status" id="status" aria-live="polite">Rotate the tiles to build a route, then drop a marble.</div>
   </div>
 </main>
+
+<div id="flash" aria-hidden="true"></div>
 
 <script>
 const DR = [-1, 0, 1, 0];   // sides: 0 top, 1 right, 2 bottom, 3 left
@@ -1287,6 +1318,8 @@ function newLevel() {
   status.textContent = 'Rotate the tiles to build a route, then drop a marble.';
   if (frenzy) { document.body.classList.add('frenzy-mode'); startClock(); }
   else document.body.classList.remove('frenzy-mode');
+  // Every fresh board pops with a white flash once the combo has the music running.
+  if (comboCount >= COMBO_MUSIC_AT) flashScreen();
 }
 
 panel.addEventListener('click', e => {
@@ -1498,7 +1531,7 @@ const COMBO_MUSIC_OPEN  = 18000;   // fully unmuffled corner (Hz)
 const COMBO_MUSIC_VOL   = 0.9;     // normal volume once the ramp finishes
 const COMBO_MUSIC_PITCH = false;   // true = hold pitch while slowing down
 
-const music = { el: null, ctx: null, src: null, lp: null, gain: null, ok: false, on: false, t: 0, stopTimer: null };
+const music = { el: null, ctx: null, src: null, lp: null, gain: null, analyser: null, freq: null, ok: false, on: false, t: 0, stopTimer: null };
 
 function initMusic() {
   if (music.el) return;
@@ -1523,7 +1556,13 @@ function initMusic() {
     const gain = ctx.createGain();
     gain.gain.value = 0;
     src.connect(lp).connect(gain).connect(ctx.destination);
-    Object.assign(music, { ctx, src, lp, gain, ok: true });
+    // Tapped after the filter, so the visualiser tracks what is actually heard.
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.72;
+    lp.connect(analyser);
+    const freq = new Uint8Array(analyser.frequencyBinCount);
+    Object.assign(music, { ctx, src, lp, gain, analyser, freq, ok: true });
   } catch (_) { music.ok = false; }
 }
 
@@ -1574,10 +1613,103 @@ function tickMusic(dt) {
   music.el.playbackRate = COMBO_MUSIC_RATE + (1 - COMBO_MUSIC_RATE) * shape;
 }
 
+/* ---------- beat visualiser ----------
+   A spectrum strip hugging the bottom edge, fed by the analyser above. Each
+   kick drum fires a pulse that decays; the whole strip fades in at the combo-10
+   threshold and keeps brightening for VIZ_RAMP, but never past a low ceiling so
+   the pipes stay readable. It resets whenever the music stops. */
+const VIZ_RAMP      = 240000;  // 4 minutes from dim to its brightest
+const VIZ_ALPHA_MIN = 0.07;    // barely there when it first appears
+const VIZ_ALPHA_MAX = 0.42;    // final ceiling — still deliberately restrained
+const VIZ_HEIGHT    = 118;     // logical height of the strip in CSS pixels
+
+const vizCanvas = document.getElementById('viz');
+const vizCtx = vizCanvas.getContext('2d', { alpha: true, desynchronized: true });
+let vizW = 0, vizH = VIZ_HEIGHT;
+let vizT = 0, vizAlpha = 0, vizTarget = 0;
+let bassAvg = 0.015, bassSmooth = 0, pulse = 0, lastBeatAt = 0;
+
+function sizeViz() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  vizW = window.innerWidth;
+  vizH = VIZ_HEIGHT;
+  vizCanvas.width  = Math.round(vizW * dpr);
+  vizCanvas.height = Math.round(vizH * dpr);
+  vizCanvas.style.width  = vizW + 'px';
+  vizCanvas.style.height = vizH + 'px';
+  vizCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+sizeViz();
+window.addEventListener('resize', sizeViz);
+
+function vizTick(dt, now) {
+  const running = music.ok && music.on && music.el && !music.el.paused;
+
+  if (running) {
+    vizT = Math.min(1, vizT + dt / VIZ_RAMP);
+    vizTarget = VIZ_ALPHA_MIN + (VIZ_ALPHA_MAX - VIZ_ALPHA_MIN) * vizT;
+  } else {
+    vizT = 0;
+    vizTarget = 0;
+  }
+  vizAlpha += (vizTarget - vizAlpha) * Math.min(1, dt / 200);
+
+  vizCtx.clearRect(0, 0, vizW, vizH);
+  if (vizAlpha < 0.004) { pulse = 0; return; }
+  if (!running || !music.analyser) return;
+
+  const data = music.freq;
+  music.analyser.getByteFrequencyData(data);
+
+  // Kick band: roughly 40–230 Hz with a 1024-point FFT.
+  let bass = 0;
+  for (let i = 1; i <= 5; i++) bass += data[i];
+  bass = Math.pow(bass / (5 * 255), 1.35);
+  bassSmooth += (bass - bassSmooth) * 0.28;
+  bassAvg += (bass - bassAvg) * 0.012;
+
+  if (bass > bassAvg * 1.32 && bass > 0.12 && now - lastBeatAt > 170) {
+    lastBeatAt = now;
+    pulse = Math.min(1.5, pulse + 0.85);
+  }
+  pulse *= Math.pow(0.9, dt / 16.7);
+
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#a5d84b';
+  const bars = Math.max(22, Math.min(64, Math.round(vizW / 15)));
+  const slot = vizW / bars;
+  const maxBin = Math.min(data.length - 1, 240);
+  const ceiling = vizH * 0.9;
+
+  vizCtx.fillStyle = accent;
+  for (let i = 0; i < bars; i++) {
+    const bin = Math.max(1, Math.round(Math.pow(maxBin, i / (bars - 1))));
+    const v = Math.pow((data[bin] || 0) / 255, 1.3);
+    const h = Math.min(ceiling, (v * 0.8 + pulse * 0.45) * ceiling);
+    if (h < 1.2) continue;
+    vizCtx.globalAlpha = vizAlpha * (0.3 + 0.7 * (h / ceiling));
+    vizCtx.fillRect(i * slot, vizH - h, Math.max(1, slot - 2), h);
+  }
+
+  // A slim beat bar welded to the very bottom edge.
+  vizCtx.globalAlpha = vizAlpha * (0.55 + 0.45 * Math.min(1, pulse));
+  vizCtx.fillRect(0, vizH - 2.5, vizW, 2.5);
+  vizCtx.globalAlpha = 1;
+}
+
+/* ---------- combo flash ---------- */
+const flashEl = document.getElementById('flash');
+function flashScreen() {
+  flashEl.classList.remove('fire');
+  void flashEl.offsetWidth;      // restart the animation
+  flashEl.classList.add('fire');
+}
+
 let musicLast = performance.now();
 function musicFrame(now) {
-  tickMusic(Math.min(250, now - musicLast));
+  const dt = Math.min(250, now - musicLast);
   musicLast = now;
+  tickMusic(dt);
+  vizTick(dt, now);
   requestAnimationFrame(musicFrame);
 }
 requestAnimationFrame(musicFrame);
