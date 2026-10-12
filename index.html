@@ -752,6 +752,35 @@ body.frenzy-mode #speedBtn.visible { display:block; }
   display: block;
   pointer-events: none;
 }
+
+/* Mirror copy of the visualiser welded to the top edge, flipped so its
+   bars hang downwards and its beat bar hugs the top of the screen. */
+#vizTop {
+  position: fixed;
+  left: 0; right: 0; top: 0;
+  z-index: 3;
+  display: block;
+  pointer-events: none;
+  transform: scaleY(-1);
+  transform-origin: center top;
+}
+
+/* Beat-reactive vignette hugging the screen edges. Its opacity is driven
+   from JS: it fades in with the music and spikes on every detected kick. */
+#vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 2;                 /* tints the maze, sits under the visualisers */
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse 88% 88% at 50% 50%,
+    rgba(0,0,0,0) 0%,
+    rgba(0,0,0,0) 52%,
+    color-mix(in srgb, var(--accent) 38%, transparent) 82%,
+    color-mix(in srgb, var(--accent) 92%, transparent) 100%);
+  will-change: opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #flash.fire { animation-duration: .28s; }
 }
@@ -775,6 +804,8 @@ body.frenzy-mode #speedBtn.visible { display:block; }
 </div>
 
 <canvas id="viz" aria-hidden="true"></canvas>
+<canvas id="vizTop" aria-hidden="true"></canvas>
+<div id="vignette" aria-hidden="true"></div>
 
 <button id="newBtn" class="control-new" type="button">New level</button>
 <button id="speedBtn" type="button" aria-label="Speed up marble">Speed up »</button>
@@ -1269,9 +1300,10 @@ function clearCombo() {
 /* ---------- infinite progression ---------- */
 /* The accent walks around the colour wheel by HUE_STEP degrees per level.
    Combo frenzy chains levels back-to-back, which makes that walk race, so the
-   step is divided by COMBO_SPIN_SLOWDOWN while frenzy is running. */
+   step is divided by COMBO_SPIN_SLOWDOWN while frenzy is running.
+   1.5 = the combo spin is now twice as fast as the original ÷3 setting. */
 const HUE_STEP = 9;
-const COMBO_SPIN_SLOWDOWN = 3;
+const COMBO_SPIN_SLOWDOWN = 1.5;
 let huePos = 142, hueLastValue = 4;
 
 function previewDifficulty(value) {
@@ -1613,31 +1645,40 @@ function tickMusic(dt) {
   music.el.playbackRate = COMBO_MUSIC_RATE + (1 - COMBO_MUSIC_RATE) * shape;
 }
 
-/* ---------- beat visualiser ----------
-   A spectrum strip hugging the bottom edge, fed by the analyser above. Each
-   kick drum fires a pulse that decays; the whole strip fades in at the combo-10
-   threshold and keeps brightening for VIZ_RAMP, but never past a low ceiling so
-   the pipes stay readable. It resets whenever the music stops. */
+/* ---------- beat visualiser + vignette ----------
+   Two spectrum strips fed by the analyser above — one hugging the bottom edge,
+   one mirrored at the top so its bars hang downwards. Each kick drum fires a
+   pulse that decays; the strips fade in at the combo-10 threshold and keep
+   brightening for VIZ_RAMP, but never past a low ceiling so the pipes stay
+   readable. The vignette uses the same pulse to glow around the screen edges. */
 const VIZ_RAMP      = 240000;  // 4 minutes from dim to its brightest
 const VIZ_ALPHA_MIN = 0.07;    // barely there when it first appears
 const VIZ_ALPHA_MAX = 0.42;    // final ceiling — still deliberately restrained
 const VIZ_HEIGHT    = 118;     // logical height of the strip in CSS pixels
 
-const vizCanvas = document.getElementById('viz');
-const vizCtx = vizCanvas.getContext('2d', { alpha: true, desynchronized: true });
+const vizCanvas    = document.getElementById('viz');
+const vizCtx       = vizCanvas.getContext('2d', { alpha: true, desynchronized: true });
+const vizTopCanvas = document.getElementById('vizTop');
+const vizTopCtx    = vizTopCanvas.getContext('2d', { alpha: true, desynchronized: true });
+const vignetteEl   = document.getElementById('vignette');
+
 let vizW = 0, vizH = VIZ_HEIGHT;
 let vizT = 0, vizAlpha = 0, vizTarget = 0;
 let bassAvg = 0.015, bassSmooth = 0, pulse = 0, lastBeatAt = 0;
+let vigSmooth = 0;
 
 function sizeViz() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   vizW = window.innerWidth;
   vizH = VIZ_HEIGHT;
-  vizCanvas.width  = Math.round(vizW * dpr);
-  vizCanvas.height = Math.round(vizH * dpr);
-  vizCanvas.style.width  = vizW + 'px';
-  vizCanvas.style.height = vizH + 'px';
+  for (const cv of [vizCanvas, vizTopCanvas]) {
+    cv.width  = Math.round(vizW * dpr);
+    cv.height = Math.round(vizH * dpr);
+    cv.style.width  = vizW + 'px';
+    cv.style.height = vizH + 'px';
+  }
   vizCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  vizTopCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 sizeViz();
 window.addEventListener('resize', sizeViz);
@@ -1654,25 +1695,35 @@ function vizTick(dt, now) {
   }
   vizAlpha += (vizTarget - vizAlpha) * Math.min(1, dt / 200);
 
+  // Always clear both strips so the mirrored copy mirrors everything exactly.
   vizCtx.clearRect(0, 0, vizW, vizH);
-  if (vizAlpha < 0.004) { pulse = 0; return; }
-  if (!running || !music.analyser) return;
+  vizTopCtx.clearRect(0, 0, vizW, vizH);
 
-  const data = music.freq;
-  music.analyser.getByteFrequencyData(data);
-
-  // Kick band: roughly 40–230 Hz with a 1024-point FFT.
-  let bass = 0;
-  for (let i = 1; i <= 5; i++) bass += data[i];
-  bass = Math.pow(bass / (5 * 255), 1.35);
-  bassSmooth += (bass - bassSmooth) * 0.28;
-  bassAvg += (bass - bassAvg) * 0.012;
-
-  if (bass > bassAvg * 1.32 && bass > 0.12 && now - lastBeatAt > 170) {
-    lastBeatAt = now;
-    pulse = Math.min(1.5, pulse + 0.85);
+  // Sample the spectrum and look for a kick in the bass band.
+  let data = null;
+  if (running && music.analyser) {
+    data = music.freq;
+    music.analyser.getByteFrequencyData(data);
+    let bass = 0;
+    for (let i = 1; i <= 5; i++) bass += data[i];
+    bass = Math.pow(bass / (5 * 255), 1.35);
+    bassSmooth += (bass - bassSmooth) * 0.28;
+    bassAvg += (bass - bassAvg) * 0.012;
+    if (bass > bassAvg * 1.32 && bass > 0.12 && now - lastBeatAt > 170) {
+      lastBeatAt = now;
+      pulse = Math.min(1.5, pulse + 0.85);
+    }
   }
   pulse *= Math.pow(0.9, dt / 16.7);
+
+  // Vignette: normalized ramp brightness × the live beat pulse.
+  const vNorm = VIZ_ALPHA_MAX > 0 ? Math.min(1, vizAlpha / VIZ_ALPHA_MAX) : 0;
+  const beat = Math.min(1, pulse / 1.2);
+  const vigTarget = running ? vNorm * (0.06 + beat * 0.74) : 0;
+  vigSmooth += (vigTarget - vigSmooth) * Math.min(1, dt / 55);
+  vignetteEl.style.opacity = vigSmooth < 0.003 ? '0' : vigSmooth.toFixed(3);
+
+  if (!data || vizAlpha < 0.004) return;
 
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#a5d84b';
   const bars = Math.max(22, Math.min(64, Math.round(vizW / 15)));
@@ -1680,20 +1731,24 @@ function vizTick(dt, now) {
   const maxBin = Math.min(data.length - 1, 240);
   const ceiling = vizH * 0.9;
 
-  vizCtx.fillStyle = accent;
-  for (let i = 0; i < bars; i++) {
-    const bin = Math.max(1, Math.round(Math.pow(maxBin, i / (bars - 1))));
-    const v = Math.pow((data[bin] || 0) / 255, 1.3);
-    const h = Math.min(ceiling, (v * 0.8 + pulse * 0.45) * ceiling);
-    if (h < 1.2) continue;
-    vizCtx.globalAlpha = vizAlpha * (0.3 + 0.7 * (h / ceiling));
-    vizCtx.fillRect(i * slot, vizH - h, Math.max(1, slot - 2), h);
+  // Paint the identical strip into both canvases. The top one is flipped by
+  // CSS (scaleY -1), so what lands at the bottom of its box appears at the
+  // very top of the screen, bars pointing down.
+  for (const ctx of [vizCtx, vizTopCtx]) {
+    ctx.fillStyle = accent;
+    for (let i = 0; i < bars; i++) {
+      const bin = Math.max(1, Math.round(Math.pow(maxBin, i / (bars - 1))));
+      const v = Math.pow((data[bin] || 0) / 255, 1.3);
+      const h = Math.min(ceiling, (v * 0.8 + pulse * 0.45) * ceiling);
+      if (h < 1.2) continue;
+      ctx.globalAlpha = vizAlpha * (0.3 + 0.7 * (h / ceiling));
+      ctx.fillRect(i * slot, vizH - h, Math.max(1, slot - 2), h);
+    }
+    // Slim beat bar welded to the very edge of the strip.
+    ctx.globalAlpha = vizAlpha * (0.55 + 0.45 * Math.min(1, pulse));
+    ctx.fillRect(0, vizH - 2.5, vizW, 2.5);
+    ctx.globalAlpha = 1;
   }
-
-  // A slim beat bar welded to the very bottom edge.
-  vizCtx.globalAlpha = vizAlpha * (0.55 + 0.45 * Math.min(1, pulse));
-  vizCtx.fillRect(0, vizH - 2.5, vizW, 2.5);
-  vizCtx.globalAlpha = 1;
 }
 
 /* ---------- combo flash ---------- */
