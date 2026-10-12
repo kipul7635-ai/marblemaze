@@ -461,6 +461,27 @@
   .cell.locked .edge { stroke: #5d7487; }
   .cell.locked .mid  { stroke: #b4c5d3; }
 
+  /* ---------- Solved-path glow (placed AFTER locked rules so it wins) ---------- */
+  .cell.solved {
+    background: linear-gradient(180deg, rgba(214,255,228,.95), rgba(150,240,180,.62));
+    border-color: rgba(120,240,170,.95);
+    box-shadow:
+      0 0 18px 3px rgba(60,230,130,.75),
+      0 0 34px 8px rgba(60,230,130,.32),
+      inset 0 -4px 8px rgba(30,120,200,.16);
+    animation: solvedPop .55s cubic-bezier(.34, 1.56, .64, 1);
+    z-index: 2;
+  }
+  .cell.solved .pipe .edge  { stroke: var(--correct-lo); stroke-opacity: .85; }
+  .cell.solved .pipe .mid   { stroke: var(--correct-hi); stroke-opacity: .95; }
+  .cell.solved .pipe .shine { stroke: #fff; }
+  .cell.solved .lock { background: rgba(220,255,235,.95); }
+  @keyframes solvedPop {
+    0%   { scale: 1; }
+    45%  { scale: 1.18; }
+    100% { scale: 1; }
+  }
+
   .lock {
     position: absolute;
     right: 3px; bottom: 3px;
@@ -544,7 +565,7 @@
     :root { transition: none; }
     .bubble { animation: none; bottom: 0; transform: translateY(var(--ry, -40vh)); }
     .pipe, button, .status { transition: none; }
-    .cell.nope, .cup.hit { animation: none; }
+    .cell.nope, .cup.hit, .cell.solved { animation: none; }
   }
 </style>
 </head>
@@ -621,11 +642,11 @@ const DC = [0, 1, 0, -1];
 const G = 4;                // gap between tiles (px)
 
 const DIFFICULTIES = [
-  { name: 'Easy',    rows: 5, cols: 5, holeRadii: [0.5],            locked: 0,  pathLen: 11, desc: 'Small grid, a tiny hole, short route' },
-  { name: 'Normal',  rows: 6, cols: 6, holeRadii: [1, 0.5],         locked: 3,  pathLen: 16, desc: 'Bigger grid, a few holes, a few locked tiles' },
-  { name: 'Hard',    rows: 7, cols: 7, holeRadii: [1.5, 1, 0.5],    locked: 6,  pathLen: 22, desc: 'Wide holes, more locked tiles, winding route' },
-  { name: 'Extreme', rows: 8, cols: 8, holeRadii: [1.5, 1, 1, 0.5], locked: 10, pathLen: 30, desc: 'Big grid, big holes, long winding route' },
-  { name: 'Insane',  rows: 9, cols: 9, holeRadii: [2, 1.5, 1, 0.5], locked: 15, pathLen: 38, desc: 'Huge grid, huge holes, very long route' },
+  { name: 'Easy',    rows: 5,  cols: 5,  holeRadii: [0.5],                   locked: 0,   pathLen: 11,  desc: 'Small grid, a tiny hole, short route' },
+  { name: 'Normal',  rows: 6,  cols: 6,  holeRadii: [1, 0.5],                locked: 3,   pathLen: 16,  desc: 'Bigger grid, a few holes, a few locked tiles' },
+  { name: 'Hard',    rows: 9,  cols: 9,  holeRadii: [2, 1.5, 1, 0.5],        locked: 15,  pathLen: 38,  desc: 'Huge grid, huge holes, very long route' },
+  { name: 'Extreme', rows: 18, cols: 18, holeRadii: [3, 2, 1.5, 1, 0.5],     locked: 40,  pathLen: 90,  desc: 'Massive grid, sprawling holes, marathon route' },
+  { name: 'Insane',  rows: 50, cols: 50, holeRadii: [6, 5, 4, 3, 2, 1],      locked: 150, pathLen: 220, desc: 'Gigantic 50×50 grid — a true marble marathon' },
 ];
 const COLORS = ['#22b573', '#1e90e6', '#ee9a00', '#f0622a', '#e5365f'];
 
@@ -648,6 +669,7 @@ const marble = Object.assign(document.createElement('div'), { className: 'marble
 
 let level = null, T = 60, M = 26;
 let busy = false, won = false, marbles = 0, runId = 0;
+let solvedTimeouts = [];
 
 /* ---------- helpers ---------- */
 const rnd = n => Math.floor(Math.random() * n);
@@ -817,17 +839,22 @@ function assemble(cfg, holes, target, start, path) {
 
 function generateLevel(cfg) {
   const { rows, cols } = cfg;
-  for (let attempt = 0; attempt < 400; attempt++) {
+  const area = rows * cols;
+  // Cap inner path samples for huge grids so generation stays snappy.
+  const samples = Math.max(6, Math.min(40, Math.round(6000 / Math.max(1, area))));
+  const attempts = area > 400 ? 120 : 400;
+  for (let attempt = 0; attempt < attempts; attempt++) {
     const start  = { r: 0, c: rnd(cols) };   // random drop column
     const target = rnd(cols);
-    const holes = attempt < 300 ? makeHoles(cfg, target, start)
+    const holes = attempt < Math.floor(attempts * 0.75)
+      ? makeHoles(cfg, target, start)
       : Array.from({ length: rows }, () => Array(cols).fill(false));
     let hc = 0;
     holes.forEach(row => row.forEach(v => { if (v) hc++; }));
-    if (hc > rows * cols * 0.4) continue;
+    if (hc > area * 0.4) continue;
     if (!reachable(holes, rows, cols, target, start)) continue;
     let best = null, bestDiff = Infinity;
-    for (let k = 0; k < 40; k++) {
+    for (let k = 0; k < samples; k++) {
       const p = treePath(holes, rows, cols, target, start);
       const diff = Math.abs(p.length - cfg.pathLen) + Math.random() * .5;
       if (diff < bestDiff) { best = p; bestDiff = diff; }
@@ -877,8 +904,9 @@ function buildBoard() {
 function fit() {
   if (!level) return;
   const avail = panel.clientWidth - 24;
-  T = Math.max(24, Math.min(64, Math.floor((avail - (level.cols - 1) * G) / level.cols)));
-  M = Math.round(T * .46);
+  // Allow very small tiles for huge grids so the whole board still fits.
+  T = Math.max(8, Math.min(64, Math.floor((avail - (level.cols - 1) * G) / level.cols)));
+  M = Math.max(3, Math.round(T * .46));
   board.style.setProperty('--tile', T + 'px');
   marble.style.setProperty('--m', M + 'px');
   chute.style.left = (level.start.c * (T + G) + T * .28) + 'px';
@@ -915,6 +943,8 @@ function previewDifficulty(idx) {
 function newLevel() {
   runId++;
   busy = false; won = false; marbles = 0;
+  solvedTimeouts.forEach(clearTimeout);
+  solvedTimeouts = [];
   marble.style.display = 'none';
   board.classList.remove('busy');
   resetClock();
@@ -1028,6 +1058,18 @@ const MESSAGES = {
   loop: 'The marble went around in circles.',
 };
 
+function lightUpPath(path) {
+  // Stagger the glow so long paths cascade instead of popping all at once.
+  const perTile = Math.max(10, Math.min(55, Math.floor(1400 / Math.max(1, path.length))));
+  path.forEach(([r, c], i) => {
+    const t = setTimeout(() => {
+      const cell = level.cells[r] && level.cells[r][c];
+      if (cell && cell.el) cell.el.classList.add('solved');
+    }, i * perTile);
+    solvedTimeouts.push(t);
+  });
+}
+
 function finishRun(kind) {
   marble.style.display = 'none';
   busy = false;
@@ -1039,6 +1081,7 @@ function finishRun(kind) {
     status.className = 'status win';
     status.textContent = 'Solved in ' + timeEl.textContent + ' using ' + marbles + (marbles === 1 ? ' marble!' : ' marbles!');
     newBtn.classList.add('primary');
+    if (level && level.path) lightUpPath(level.path);
   } else {
     status.className = 'status lose';
     status.textContent = MESSAGES[kind];
