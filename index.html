@@ -754,7 +754,9 @@ body.frenzy-mode #speedBtn.visible { display:block; }
 }
 
 /* Mirror copy of the visualiser welded to the top edge, flipped so its
-   bars hang downwards and its beat bar hugs the top of the screen. */
+   bars hang downwards and its beat bar hugs the top of the screen.
+   NOTE: the flip axis must be the element's centre, otherwise scaleY(-1)
+   reflects the box above the viewport and nothing is ever visible. */
 #vizTop {
   position: fixed;
   left: 0; right: 0; top: 0;
@@ -762,7 +764,7 @@ body.frenzy-mode #speedBtn.visible { display:block; }
   display: block;
   pointer-events: none;
   transform: scaleY(-1);
-  transform-origin: center top;
+  transform-origin: center center;   /* was: center top — flipped off-screen */
 }
 
 /* Beat-reactive vignette hugging the screen edges. Its opacity is driven
@@ -1689,7 +1691,7 @@ function tickSpin(dt) {
    brightening for VIZ_RAMP, but never past a low ceiling so the pipes stay
    readable. The vignette uses the same pulse to glow around the screen edges. */
 const VIZ_RAMP      = 240000;  // 4 minutes from dim to its brightest
-const VIZ_ALPHA_MIN = 0.07;    // barely there when it first appears
+const VIZ_ALPHA_MIN = 0.18;    // baseline visibility once music is running (was 0.07 — too faint)
 const VIZ_ALPHA_MAX = 0.42;    // final ceiling — still deliberately restrained
 const VIZ_HEIGHT    = 118;     // logical height of the strip in CSS pixels
 
@@ -1754,9 +1756,11 @@ function vizTick(dt, now) {
   pulse *= Math.pow(0.9, dt / 16.7);
 
   // Vignette: normalized ramp brightness × the live beat pulse.
+  // Baseline lifted from 0.06 → 0.28 so there is a visible resting glow
+  // between kicks instead of a near-zero haze.
   const vNorm = VIZ_ALPHA_MAX > 0 ? Math.min(1, vizAlpha / VIZ_ALPHA_MAX) : 0;
   const beat = Math.min(1, pulse / 1.2);
-  const vigTarget = running ? vNorm * (0.06 + beat * 0.74) : 0;
+  const vigTarget = running ? vNorm * (0.28 + beat * 0.72) : 0;
   vigSmooth += (vigTarget - vigSmooth) * Math.min(1, dt / 55);
   vignetteEl.style.opacity = vigSmooth < 0.003 ? '0' : vigSmooth.toFixed(3);
 
@@ -1769,8 +1773,8 @@ function vizTick(dt, now) {
   const ceiling = vizH * 0.9;
 
   // Paint the identical strip into both canvases. The top one is flipped by
-  // CSS (scaleY -1), so what lands at the bottom of its box appears at the
-  // very top of the screen, bars pointing down.
+  // CSS (scaleY -1, origin centre), so what lands at the bottom of its box
+  // appears at the very top of the screen, bars pointing down.
   for (const ctx of [vizCtx, vizTopCtx]) {
     ctx.fillStyle = accent;
     for (let i = 0; i < bars; i++) {
