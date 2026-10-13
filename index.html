@@ -33,7 +33,8 @@
     /* Glossy highlight laid over any coloured gel */
     --gloss: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.14) 50%, rgba(255,255,255,0) 51%);
 
-    transition: --accent 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    /* No --accent transition: colours are randomised per level and must snap
+       in step with the canvas pipes, which repaint immediately. */
   }
 
   * { box-sizing: border-box; }
@@ -562,7 +563,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    :root { transition: none; }
     .bubble { animation: none; bottom: 0; transform: translateY(var(--ry, -40vh)); }
     .pipe, button, .status { transition: none; }
     .cell.nope, .cup.hit, .cell.solved { animation: none; }
@@ -1002,9 +1002,12 @@ function hslToRgb(h, s, l) {
 /* ---------- grid spin state ----------
    Once the combo reaches COMBO_MUSIC_AT the whole maze rotates about its own
    centre. SPIN_DEG_PER_SEC is the net result of the earlier "3× slower, then
-   double it" tuning — 2/3 of the original 36°/s, i.e. one turn every 15s. */
+   double it" tuning — 2/3 of the original 36°/s, i.e. one turn every 15s.
+   spinDir is a coin-toss sign that flips on every level win, so long combo
+   runs alternate between clockwise and anticlockwise. */
 const SPIN_DEG_PER_SEC = 5;
 let spinAngle = 0, spinSpeed = 0, spinLastSet = null;
+let spinDir = 1;
 
 /* ---------- tile logic ---------- */
 function openings(cell, rot) {
@@ -1387,24 +1390,31 @@ function clearCombo() {
   stopMusic();
 }
 
-/* ---------- infinite progression ---------- */
-/* The accent walks around the colour wheel by HUE_STEP degrees per level.
-   Combo frenzy chains levels back-to-back, which makes that walk race, so the
-   step is divided by COMBO_SPIN_SLOWDOWN while frenzy is running. The grid's
-   own rotation is driven separately in tickSpin below. */
-const HUE_STEP = 9;
-const COMBO_SPIN_SLOWDOWN = 3;
-let huePos = 142, hueLastValue = 4;
+/* ---------- infinite progression ----------
+   Every level rolls a brand-new accent colour rather than walking the hue
+   wheel, so consecutive boards read as a fresh palette instead of a slow
+   drift. Saturation and lightness still tighten with the level value, and a
+   minimum hue separation stops the new colour from landing next to the old
+   one. The random walk is skipped for the very first board only in the sense
+   that there is no previous colour to avoid. */
+const HUE_MIN_SEPARATION = 60;   // degrees of hue distance between boards
+let huePos = 142;                // current accent hue (also seeds the first roll)
+let accentH = 142, accentS = 64, accentL = 56;
 /* Mirrors of the live accent so the starfield can build rgba() strings
    without re-parsing a computed CSS colour every frame. */
-let accentH = 142, accentS = 64, accentL = 56;
+
+function hueDistance(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
 
 function previewDifficulty(value) {
-  const levels = Math.max(0, value - hueLastValue);
-  const step = (frenzy ? HUE_STEP / COMBO_SPIN_SLOWDOWN : HUE_STEP) * levels;
-  huePos = ((huePos + step) % 360 + 360) % 360;
-  hueLastValue = value;
-  const hue = huePos;
+  // Roll a new hue, re-rolling if it lands too close to the outgoing one.
+  let hue = Math.random() * 360;
+  for (let guard = 0; guard < 20 && hueDistance(hue, huePos) < HUE_MIN_SEPARATION; guard++) {
+    hue = Math.random() * 360;
+  }
+  huePos = hue;
   const sat = Math.min(88, 64 + Math.floor(Math.max(0, value - 4) / 8));
   const light = Math.max(43, 56 - Math.floor(Math.max(0, value - 4) / 12));
   accentH = hue; accentS = sat; accentL = light;
@@ -1605,11 +1615,17 @@ function finishRun(kind) {
   board.classList.remove('busy');
   if (kind === 'win') {
     won = true;
+    // Coin toss: reverse the maze's rotation direction for the next level.
+    if (Math.random() < 0.5) spinDir *= -1;
     const elapsedMs = startAt === null ? Infinity : performance.now() - startAt;
     if (elapsedMs <= comboWindowMs()) comboCount++; else comboCount = 0;
     levelRecap.textContent = 'LEVEL ' + boardValue + ' COMPLETE · ' + timeEl.textContent + ' · ' + marbles + (marbles === 1 ? ' MARBLE' : ' MARBLES') + (frenzy ? '' : '');
     frenzy = comboCount >= 3;
     syncComboMusic();
+    // Beat the level and the track slams back to lo-fi, then unmuffles
+    // over the next COMBO_MUSIC_MUFFLE_MS. Ordered after syncComboMusic so a
+    // freshly-started track is muffled too rather than resetting to clean.
+    music.muffle = 1;
     levelRecap.textContent = 'LEVEL ' + boardValue + ' COMPLETE · ' + timeEl.textContent + ' · ' + marbles + (marbles === 1 ? ' MARBLE' : ' MARBLES');
     comboBar.classList.toggle('visible', frenzy);
     comboText.textContent = 'x' + comboCount + ' combo';
@@ -1667,16 +1683,23 @@ newBtn.addEventListener('click', newLevel);
    From combo 10 the track loops underneath the game. It arrives deliberately
    lo-fi — silent, low-passed and pitched down to 0.7 — then, for as long as the
    combo survives, it climbs to full volume, an open filter and normal speed
-   over COMBO_MUSIC_RAMP. Break the combo and it resets to the top. */
-const COMBO_MUSIC_AT    = 10;      // combo level that brings the music in
-const COMBO_MUSIC_RAMP  = 120000;  // 2 minutes from lo-fi to full fidelity
-const COMBO_MUSIC_RATE  = 0.7;     // starting playback rate
-const COMBO_MUSIC_CUT   = 320;     // starting low-pass corner (Hz)
-const COMBO_MUSIC_OPEN  = 18000;   // fully unmuffled corner (Hz)
-const COMBO_MUSIC_VOL   = 0.9;     // normal volume once the ramp finishes
-const COMBO_MUSIC_PITCH = false;   // true = hold pitch while slowing down
+   over COMBO_MUSIC_RAMP. Break the combo and it resets to the top.
 
-const music = { el: null, ctx: null, src: null, lp: null, gain: null, analyser: null, freq: null, ok: false, on: false, t: 0, stopTimer: null };
+   On top of that long ramp sits a short muffle: clearing a level slams
+   music.muffle to 1, which drags the ramp's shape to zero for an instant
+   before it decays back over COMBO_MUSIC_MUFFLE_MS. Because the ramp and the
+   muffle multiply, the effect works the same whether the track is three
+   seconds or three minutes into its progression. */
+const COMBO_MUSIC_AT        = 10;      // combo level that brings the music in
+const COMBO_MUSIC_RAMP      = 120000;  // 2 minutes from lo-fi to full fidelity
+const COMBO_MUSIC_MUFFLE_MS = 5000;    // level win: hard muffle, 5s recovery
+const COMBO_MUSIC_RATE      = 0.7;     // starting playback rate
+const COMBO_MUSIC_CUT       = 320;     // starting low-pass corner (Hz)
+const COMBO_MUSIC_OPEN      = 18000;   // fully unmuffled corner (Hz)
+const COMBO_MUSIC_VOL       = 0.9;     // normal volume once the ramp finishes
+const COMBO_MUSIC_PITCH     = false;   // true = hold pitch while slowing down
+
+const music = { el: null, ctx: null, src: null, lp: null, gain: null, analyser: null, freq: null, ok: false, on: false, t: 0, muffle: 0, stopTimer: null };
 
 function initMusic() {
   if (music.el) return;
@@ -1719,6 +1742,7 @@ function startMusic() {
   const now = music.ctx.currentTime;
   music.on = true;
   music.t = 0;
+  music.muffle = 0;                                  // fresh start is never muffled
   music.gain.gain.cancelScheduledValues(now);
   music.gain.gain.setValueAtTime(0, now);            // start silent
   music.lp.frequency.cancelScheduledValues(now);
@@ -1733,6 +1757,7 @@ function stopMusic() {
   if (!music.ok || !music.on) return;
   music.on = false;
   music.t = 0;
+  music.muffle = 0;
   const now = music.ctx.currentTime;
   music.gain.gain.cancelScheduledValues(now);
   music.gain.gain.setValueAtTime(music.gain.gain.value, now);
@@ -1750,8 +1775,11 @@ function syncComboMusic() {
 function tickMusic(dt) {
   if (!music.ok || !music.on) return;
   music.t = Math.min(1, music.t + dt / COMBO_MUSIC_RAMP);
+  // Linear decay from the level-win slam back to clean over 5 seconds.
+  music.muffle = Math.max(0, music.muffle - dt / COMBO_MUSIC_MUFFLE_MS);
   const now = music.ctx.currentTime;
-  const shape = music.t;
+  // Ramp and muffle multiply, so a win sounds the same at combo 10 or combo 40.
+  const shape = music.t * (1 - music.muffle);
   music.gain.gain.setTargetAtTime(COMBO_MUSIC_VOL * shape, now, 0.08);
   music.lp.frequency.setTargetAtTime(
     COMBO_MUSIC_CUT * Math.pow(COMBO_MUSIC_OPEN / COMBO_MUSIC_CUT, shape), now, 0.15);
@@ -1761,10 +1789,12 @@ function tickMusic(dt) {
 /* ---------- grid spin (per-frame) ----------
    Eases the rotation speed up while the combo is at or above COMBO_MUSIC_AT,
    and back down when it drops. Once the spin has bled off, the board glides
-   upright along the shortest arc so it never rests at an odd angle. */
+   upright along the shortest arc so it never rests at an odd angle.
+   spinDir carries the per-level coin toss, so the maze reverses direction
+   every time a board is cleared. */
 function tickSpin(dt) {
   const wantSpin = comboCount >= COMBO_MUSIC_AT;
-  const targetSpeed = wantSpin ? SPIN_DEG_PER_SEC : 0;
+  const targetSpeed = wantSpin ? SPIN_DEG_PER_SEC * spinDir : 0;
   spinSpeed += (targetSpeed - spinSpeed) * Math.min(1, dt / 250);
   spinAngle += spinSpeed * dt / 1000;
 
