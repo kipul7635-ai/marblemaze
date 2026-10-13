@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Marble Drop</title>
+<title>MarbleMaze</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap');
 
@@ -834,6 +834,28 @@ body.frenzy-mode #speedBtn.visible { display:block; }
   pointer-events: none;
 }
 
+/* Ambient board glow (combo 13+). Sits on the same layer as the starfield —
+   behind the transparent board-panel, so it reads as light coming from the
+   pipes themselves rather than a HUD overlay. Sized and positioned from JS
+   so it re-centres on the board as the camera pans and zooms; its opacity is
+   driven by the analyser, so loud passages bloom and each kick fires a spike.
+   Its colour is rebuilt from the live accent whenever the level changes. */
+#boardGlow {
+  position: fixed;
+  left: 0; top: 0;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  will-change: opacity;
+  background: radial-gradient(circle,
+    rgba(165,216,75,0.85) 0%,
+    rgba(165,216,75,0.42) 26%,
+    rgba(165,216,75,0.14) 50%,
+    rgba(165,216,75,0) 75%);
+}
+
 @media (max-width: 620px) {
   #chillToggle { left: 14px; padding: 8px; font-size: 10px; letter-spacing: .08em; }
 }
@@ -860,6 +882,7 @@ body.frenzy-mode #speedBtn.visible { display:block; }
   <span class="bubble" style="--x:93%; --s:38px; --d:27s; --delay:-23s; --ry:-38vh"></span>
 </div>
 
+<div id="boardGlow" aria-hidden="true"></div>
 <canvas id="starfield" aria-hidden="true"></canvas>
 <canvas id="viz" aria-hidden="true"></canvas>
 <canvas id="vizTop" aria-hidden="true"></canvas>
@@ -1421,6 +1444,9 @@ function previewDifficulty(value) {
   document.documentElement.style.setProperty('--accent', `hsl(${hue} ${sat}% ${light}%)`);
   document.documentElement.style.setProperty('--correct-hi', `hsl(${(hue + 42) % 360} 85% 72%)`);
   document.documentElement.style.setProperty('--correct-lo', `hsl(${(hue + 42) % 360} 72% 38%)`);
+  // The board glow is a radial gradient built from the same RGB triplet, so
+  // it has to be re-baked whenever the accent changes.
+  updateGlowGradient();
 }
 
 function newLevel() {
@@ -2043,6 +2069,68 @@ function vizTick(dt, now) {
   }
 }
 
+/* ---------- ambient board glow (combo 13+) ----------
+   A radial gradient that lives behind the pipes and is centred on the board's
+   screen position. Overall loudness sets its resting level; each kick spikes
+   it brighter. It fades in only once the combo reaches COMBO_GLOW_AT, and
+   disappears when the combo drops below it. Because the element is a fixed-
+   size square (re-sized from JS whenever zoom changes) and only translated,
+   the browser never has to lay out a scaled gradient mid-beat — the pulse is
+   purely an opacity change. */
+const COMBO_GLOW_AT   = 13;
+const GLOW_ALPHA_BASE = 0.10;   // resting brightness once active
+const GLOW_ALPHA_BEAT = 0.46;   // peak extra brightness added on a kick
+const boardGlow = document.getElementById('boardGlow');
+let glowAlpha = 0, glowSize = 0;
+
+function updateGlowGradient() {
+  const [r, g, b] = hslToRgb(accentH, accentS, accentL);
+  boardGlow.style.background = 'radial-gradient(circle, ' +
+    'rgba(' + r + ',' + g + ',' + b + ',0.85) 0%, ' +
+    'rgba(' + r + ',' + g + ',' + b + ',0.42) 26%, ' +
+    'rgba(' + r + ',' + g + ',' + b + ',0.14) 50%, ' +
+    'rgba(' + r + ',' + g + ',' + b + ',0) 75%)';
+}
+
+function tickBoardGlow(dt) {
+  const active = comboCount >= COMBO_GLOW_AT && !!level;
+  const running = music.ok && music.on && music.el && !music.el.paused;
+
+  let target = 0;
+  if (active && running && music.analyser) {
+    // Sustained brightness from overall loudness, sharper spikes from kicks.
+    const freq = music.freq;
+    const step = Math.max(1, Math.floor(freq.length / 96));
+    let loud = 0, n = 0;
+    for (let i = 2; i < freq.length; i += step) { loud += freq[i]; n++; }
+    loud = n ? Math.pow(loud / n / 255, 1.15) : 0;
+    const beat = Math.min(1, pulse / 1.2);
+    target = GLOW_ALPHA_BASE + GLOW_ALPHA_BEAT * Math.max(loud * 0.85, beat);
+  }
+
+  // Asymmetric attack/release: rise fast on a kick, fall a bit slower.
+  const rate = target > glowAlpha ? 90 : 180;
+  glowAlpha += (target - glowAlpha) * Math.min(1, dt / rate);
+
+  if (glowAlpha < 0.004) {
+    if (boardGlow.style.opacity !== '0') boardGlow.style.opacity = '0';
+    return;
+  }
+  boardGlow.style.opacity = glowAlpha.toFixed(3);
+
+  // Keep it centred on the board in screen space. Size only changes when the
+  // zoom does, so guard the write — setting width/height forces layout.
+  const bw = level.cols * T, bh = level.rows * T;
+  const size = Math.max(bw, bh) * zoom * 1.7;
+  if (Math.abs(size - glowSize) > 0.5) {
+    glowSize = size;
+    boardGlow.style.width  = size + 'px';
+    boardGlow.style.height = size + 'px';
+  }
+  boardGlow.style.left = (innerWidth  / 2 + cameraX) + 'px';
+  boardGlow.style.top  = (innerHeight / 2 + cameraY) + 'px';
+}
+
 /* ---------- combo flash ---------- */
 const flashEl = document.getElementById('flash');
 function flashScreen() {
@@ -2058,6 +2146,7 @@ function musicFrame(now) {
   tickMusic(dt);
   vizTick(dt, now);
   tickStars(dt);
+  tickBoardGlow(dt);
   tickSpin(dt);
   requestAnimationFrame(musicFrame);
 }
