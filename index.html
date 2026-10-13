@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MarbleMaze</title>
+<title>Marble Drop</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap');
 
@@ -807,7 +807,7 @@ body.frenzy-mode #speedBtn.visible { display:block; }
 }
 
 /* Beat-reactive vignette hugging the screen edges. Its opacity is driven
-   from JS: it fades in with the music and spikes on every detected kick. */
+   from JS: it fades in with the music and spikes hard on every detected kick. */
 #vignette {
   position: fixed;
   inset: 0;
@@ -822,6 +822,16 @@ body.frenzy-mode #speedBtn.visible { display:block; }
   will-change: opacity;
 }
 
+/* Ambient starry-sky layer (combo 12+). Sits furthest back so it reads as a
+   deep background — the board glow and shooting stars both paint over it. */
+#ambientStars {
+  position: fixed;
+  left: 0; top: 0;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+}
+
 /* Shooting-star layer (combo 15+). Painted behind the board so the pipes
    stay legible; the board's own transparency lets the streaks show through.
    Stars live in board coordinates — the canvas re-applies the board's exact
@@ -834,12 +844,11 @@ body.frenzy-mode #speedBtn.visible { display:block; }
   pointer-events: none;
 }
 
-/* Ambient board glow (combo 13+). Sits on the same layer as the starfield —
-   behind the transparent board-panel, so it reads as light coming from the
-   pipes themselves rather than a HUD overlay. Sized and positioned from JS
+/* Ambient board glow (combo 13+). Sits above the starfield so it reads as
+   light spilling out of the pipes themselves. Sized and positioned from JS
    so it re-centres on the board as the camera pans and zooms; its opacity is
-   driven by the analyser, so loud passages bloom and each kick fires a spike.
-   Its colour is rebuilt from the live accent whenever the level changes. */
+   driven by the analyser, so loud passages bloom and each kick fires a hard
+   spike. Its colour is rebuilt from the live accent on every level change. */
 #boardGlow {
   position: fixed;
   left: 0; top: 0;
@@ -882,6 +891,8 @@ body.frenzy-mode #speedBtn.visible { display:block; }
   <span class="bubble" style="--x:93%; --s:38px; --d:27s; --delay:-23s; --ry:-38vh"></span>
 </div>
 
+<!-- Layered back-to-front: ambient stars (deepest), board glow, shooting stars. -->
+<canvas id="ambientStars" aria-hidden="true"></canvas>
 <div id="boardGlow" aria-hidden="true"></div>
 <canvas id="starfield" aria-hidden="true"></canvas>
 <canvas id="viz" aria-hidden="true"></canvas>
@@ -1480,8 +1491,9 @@ function newLevel() {
   status.textContent = 'Rotate the tiles to build a route, then drop a marble.';
   // Chill mode is a first-board-only option; once value climbs past 4 it is gone.
   chillToggle.classList.toggle('hidden', boardValue !== 4);
-  // A new board wipes any shooting stars still in flight.
+  // A new board wipes any stars still in flight.
   stars.length = 0; starSpawnAccum = 0;
+  ambientStars.length = 0; ambientSpawnAccum = 0;
   if (frenzy) { document.body.classList.add('frenzy-mode'); startClock(); }
   else document.body.classList.remove('frenzy-mode');
   // Every fresh board pops with a white flash once the combo has the music running.
@@ -1850,6 +1862,99 @@ function tickSpin(dt) {
   }
 }
 
+/* ---------- ambient starry sky (combo 12+) ----------
+   Little square "stars" scattered across the viewport. Each spawns with a
+   random size and peak alpha, fades in, holds for a random 2–8 seconds while
+   softly twinkling, then dims out. Screen-space (not board-space), so they
+   read as distant sky rather than something the maze drags around with it.
+   Sits at the very back — behind the board glow and the shooting stars. */
+const COMBO_AMBIENT_AT = 12;
+const ambientCanvas = document.getElementById('ambientStars');
+const ambientCtx = ambientCanvas.getContext('2d', { alpha: true, desynchronized: true });
+const ambientStars = [];
+let ambientDpr = 1, ambientSpawnAccum = 0, ambientDirty = false;
+
+function sizeAmbient() {
+  ambientDpr = Math.min(1.5, window.devicePixelRatio || 1);
+  ambientCanvas.width  = Math.round(innerWidth  * ambientDpr);
+  ambientCanvas.height = Math.round(innerHeight * ambientDpr);
+  ambientCanvas.style.width  = innerWidth  + 'px';
+  ambientCanvas.style.height = innerHeight + 'px';
+}
+sizeAmbient();
+window.addEventListener('resize', sizeAmbient);
+
+function spawnAmbient() {
+  const fadeIn  = 0.4 + Math.random() * 0.7;
+  const hold    = 2 + Math.random() * 6;
+  const fadeOut = 1.0 + Math.random() * 1.6;
+  ambientStars.push({
+    x: Math.random() * innerWidth,
+    y: Math.random() * innerHeight,
+    size: 1.5 + Math.random() * 3.2,        // little squares, 1.5–4.7 px
+    peak: 0.22 + Math.random() * 0.55,
+    t: 0,
+    fadeIn, hold, fadeOut,
+    life: fadeIn + hold + fadeOut,
+    phase: Math.random() * Math.PI * 2,     // twinkle offset, so they desync
+  });
+}
+
+function tickAmbient(dt) {
+  const active = comboCount >= COMBO_AMBIENT_AT;
+
+  if (!active && !ambientStars.length) {
+    if (ambientDirty) {
+      ambientCtx.setTransform(ambientDpr, 0, 0, ambientDpr, 0, 0);
+      ambientCtx.clearRect(0, 0, innerWidth, innerHeight);
+      ambientDirty = false;
+    }
+    return;
+  }
+
+  ambientCtx.setTransform(ambientDpr, 0, 0, ambientDpr, 0, 0);
+  ambientCtx.clearRect(0, 0, innerWidth, innerHeight);
+  ambientDirty = true;
+
+  if (active) {
+    // Trickle in faster as the combo climbs, so a long run fills the sky.
+    const rate = Math.min(5, 1.8 + (comboCount - COMBO_AMBIENT_AT) * 0.25);
+    ambientSpawnAccum += (dt / 1000) * rate;
+    let guard = 0;
+    while (ambientSpawnAccum >= 1 && guard++ < 6) {
+      ambientSpawnAccum -= 1;
+      spawnAmbient();
+    }
+  } else {
+    ambientSpawnAccum = 0;
+  }
+
+  if (!ambientStars.length) return;
+
+  const [r, g, b] = hslToRgb(accentH, accentS, accentL);
+  const dts = dt / 1000;
+
+  for (let i = ambientStars.length - 1; i >= 0; i--) {
+    const s = ambientStars[i];
+    s.t += dts;
+    if (s.t >= s.life) { ambientStars.splice(i, 1); continue; }
+
+    // Piecewise envelope: rise, hold, fall.
+    let a;
+    if (s.t < s.fadeIn) a = s.t / s.fadeIn;
+    else if (s.t < s.fadeIn + s.hold) a = 1;
+    else a = 1 - (s.t - s.fadeIn - s.hold) / s.fadeOut;
+
+    // Gentle twinkle so held stars shimmer rather than sit dead still.
+    const twinkle = 1 + 0.18 * Math.sin(s.t * 5.5 + s.phase);
+    const alpha = Math.max(0, a * s.peak * twinkle);
+    if (alpha < 0.008) continue;
+
+    ambientCtx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+    ambientCtx.fillRect(s.x - s.size * 0.5, s.y - s.size * 0.5, s.size, s.size);
+  }
+}
+
 /* ---------- shooting stars (combo 15+) ----------
    The streaks live in *board* coordinates. Every frame the canvas re-applies
    the board's own transform — translate to viewport centre + pan, rotate by
@@ -1966,7 +2071,8 @@ function tickStars(dt) {
    one mirrored at the top so its bars hang downwards. Each kick drum fires a
    pulse that decays; the strips fade in at the combo-10 threshold and keep
    brightening for VIZ_RAMP, but never past a low ceiling so the pipes stay
-   readable. The vignette uses the same pulse to glow around the screen edges. */
+   readable. The vignette uses the same pulse to glow around the screen edges;
+   its beat response is deliberately strong so kicks read as a hit. */
 const VIZ_RAMP      = 240000;  // 4 minutes from dim to its brightest
 const VIZ_ALPHA_MIN = 0.18;    // baseline visibility once music is running (was 0.07 — too faint)
 const VIZ_ALPHA_MAX = 0.42;    // final ceiling — still deliberately restrained
@@ -2032,12 +2138,12 @@ function vizTick(dt, now) {
   }
   pulse *= Math.pow(0.9, dt / 16.7);
 
-  // Vignette: normalized ramp brightness × the live beat pulse.
-  // Baseline lifted from 0.06 → 0.28 so there is a visible resting glow
-  // between kicks instead of a near-zero haze.
+  // Vignette: boosted beat response. The baseline is kept modest so the
+  // edges don't dominate at rest, but each kick pushes the multiplier up
+  // hard, so hits read as a sharp flare rather than a slow swell.
   const vNorm = VIZ_ALPHA_MAX > 0 ? Math.min(1, vizAlpha / VIZ_ALPHA_MAX) : 0;
-  const beat = Math.min(1, pulse / 1.2);
-  const vigTarget = running ? vNorm * (0.28 + beat * 0.72) : 0;
+  const beat = Math.min(1.25, pulse);
+  const vigTarget = running ? Math.min(1, vNorm * (0.22 + beat * 1.05)) : 0;
   vigSmooth += (vigTarget - vigSmooth) * Math.min(1, dt / 55);
   vignetteEl.style.opacity = vigSmooth < 0.003 ? '0' : vigSmooth.toFixed(3);
 
@@ -2072,14 +2178,14 @@ function vizTick(dt, now) {
 /* ---------- ambient board glow (combo 13+) ----------
    A radial gradient that lives behind the pipes and is centred on the board's
    screen position. Overall loudness sets its resting level; each kick spikes
-   it brighter. It fades in only once the combo reaches COMBO_GLOW_AT, and
+   it much harder. It fades in only once the combo reaches COMBO_GLOW_AT, and
    disappears when the combo drops below it. Because the element is a fixed-
    size square (re-sized from JS whenever zoom changes) and only translated,
    the browser never has to lay out a scaled gradient mid-beat — the pulse is
    purely an opacity change. */
 const COMBO_GLOW_AT   = 13;
-const GLOW_ALPHA_BASE = 0.10;   // resting brightness once active
-const GLOW_ALPHA_BEAT = 0.46;   // peak extra brightness added on a kick
+const GLOW_ALPHA_BASE = 0.06;   // resting brightness once active
+const GLOW_ALPHA_BEAT = 0.65;   // extra brightness on a kick — the money shot
 const boardGlow = document.getElementById('boardGlow');
 let glowAlpha = 0, glowSize = 0;
 
@@ -2104,12 +2210,14 @@ function tickBoardGlow(dt) {
     let loud = 0, n = 0;
     for (let i = 2; i < freq.length; i += step) { loud += freq[i]; n++; }
     loud = n ? Math.pow(loud / n / 255, 1.15) : 0;
-    const beat = Math.min(1, pulse / 1.2);
-    target = GLOW_ALPHA_BASE + GLOW_ALPHA_BEAT * Math.max(loud * 0.85, beat);
+    // pulse goes up to 1.5; cap at 1.2 so kicks have much more headroom than
+    // sustained loudness, giving a hard snap on every hit.
+    const beat = Math.min(1.2, pulse);
+    target = GLOW_ALPHA_BASE + GLOW_ALPHA_BEAT * Math.max(loud * 0.55, beat * 0.95);
   }
 
   // Asymmetric attack/release: rise fast on a kick, fall a bit slower.
-  const rate = target > glowAlpha ? 90 : 180;
+  const rate = target > glowAlpha ? 70 : 160;
   glowAlpha += (target - glowAlpha) * Math.min(1, dt / rate);
 
   if (glowAlpha < 0.004) {
@@ -2145,6 +2253,7 @@ function musicFrame(now) {
   musicLast = now;
   tickMusic(dt);
   vizTick(dt, now);
+  tickAmbient(dt);
   tickStars(dt);
   tickBoardGlow(dt);
   tickSpin(dt);
