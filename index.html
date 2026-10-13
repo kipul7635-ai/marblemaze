@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MarbleMaze</title>
+<title>Marble Drop</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap');
 
@@ -1625,6 +1625,8 @@ function finishRun(kind) {
     // Beat the level and the track slams back to lo-fi, then unmuffles
     // over the next COMBO_MUSIC_MUFFLE_MS. Ordered after syncComboMusic so a
     // freshly-started track is muffled too rather than resetting to clean.
+    // Depth is deliberately partial (see the MUFFLE_DEPTH / MUFFLE_VOLUME
+    // constants) so the track only dulls — it never cuts out.
     music.muffle = 1;
     levelRecap.textContent = 'LEVEL ' + boardValue + ' COMPLETE · ' + timeEl.textContent + ' · ' + marbles + (marbles === 1 ? ' MARBLE' : ' MARBLES');
     comboBar.classList.toggle('visible', frenzy);
@@ -1686,18 +1688,22 @@ newBtn.addEventListener('click', newLevel);
    over COMBO_MUSIC_RAMP. Break the combo and it resets to the top.
 
    On top of that long ramp sits a short muffle: clearing a level slams
-   music.muffle to 1, which drags the ramp's shape to zero for an instant
-   before it decays back over COMBO_MUSIC_MUFFLE_MS. Because the ramp and the
-   muffle multiply, the effect works the same whether the track is three
-   seconds or three minutes into its progression. */
-const COMBO_MUSIC_AT        = 10;      // combo level that brings the music in
-const COMBO_MUSIC_RAMP      = 120000;  // 2 minutes from lo-fi to full fidelity
-const COMBO_MUSIC_MUFFLE_MS = 5000;    // level win: hard muffle, 5s recovery
-const COMBO_MUSIC_RATE      = 0.7;     // starting playback rate
-const COMBO_MUSIC_CUT       = 320;     // starting low-pass corner (Hz)
-const COMBO_MUSIC_OPEN      = 18000;   // fully unmuffled corner (Hz)
-const COMBO_MUSIC_VOL       = 0.9;     // normal volume once the ramp finishes
-const COMBO_MUSIC_PITCH     = false;   // true = hold pitch while slowing down
+   music.muffle to 1, which pulls the ramp's shape down for an instant before
+   it decays back over COMBO_MUSIC_MUFFLE_MS. The dip is deliberately partial —
+   MUFFLE_DEPTH controls how far the tone (filter + pitch) drops, and the
+   gentler MUFFLE_VOLUME controls the volume. Because the ramp and the muffle
+   multiply, the effect works the same whether the track is three seconds or
+   three minutes into its progression, and the track never cuts out. */
+const COMBO_MUSIC_AT            = 10;      // combo level that brings the music in
+const COMBO_MUSIC_RAMP          = 120000;  // 2 minutes from lo-fi to full fidelity
+const COMBO_MUSIC_MUFFLE_MS     = 5000;    // level win: hard muffle, 5s recovery
+const COMBO_MUSIC_MUFFLE_DEPTH  = 0.50;    // tone dip (filter + pitch). 0 = no dip, 1 = slam to full lo-fi
+const COMBO_MUSIC_MUFFLE_VOLUME = 0.30;    // volume dip specifically — kept shallow so the track never drops out
+const COMBO_MUSIC_RATE          = 0.7;     // starting playback rate
+const COMBO_MUSIC_CUT           = 320;     // starting low-pass corner (Hz)
+const COMBO_MUSIC_OPEN          = 18000;   // fully unmuffled corner (Hz)
+const COMBO_MUSIC_VOL           = 0.9;     // normal volume once the ramp finishes
+const COMBO_MUSIC_PITCH         = false;   // true = hold pitch while slowing down
 
 const music = { el: null, ctx: null, src: null, lp: null, gain: null, analyser: null, freq: null, ok: false, on: false, t: 0, muffle: 0, stopTimer: null };
 
@@ -1778,12 +1784,17 @@ function tickMusic(dt) {
   // Linear decay from the level-win slam back to clean over 5 seconds.
   music.muffle = Math.max(0, music.muffle - dt / COMBO_MUSIC_MUFFLE_MS);
   const now = music.ctx.currentTime;
-  // Ramp and muffle multiply, so a win sounds the same at combo 10 or combo 40.
-  const shape = music.t * (1 - music.muffle);
-  music.gain.gain.setTargetAtTime(COMBO_MUSIC_VOL * shape, now, 0.08);
+
+  // Tone (filter + pitch) dips by MUFFLE_DEPTH; volume by the gentler
+  // MUFFLE_VOLUME. Both still ride on music.t, so a win sounds the same at
+  // combo 10 or combo 40 — but the track only dulls, it never cuts out.
+  const tone = music.t * (1 - music.muffle * COMBO_MUSIC_MUFFLE_DEPTH);
+  const vol  = music.t * (1 - music.muffle * COMBO_MUSIC_MUFFLE_VOLUME);
+
+  music.gain.gain.setTargetAtTime(COMBO_MUSIC_VOL * vol, now, 0.08);
   music.lp.frequency.setTargetAtTime(
-    COMBO_MUSIC_CUT * Math.pow(COMBO_MUSIC_OPEN / COMBO_MUSIC_CUT, shape), now, 0.15);
-  music.el.playbackRate = COMBO_MUSIC_RATE + (1 - COMBO_MUSIC_RATE) * shape;
+    COMBO_MUSIC_CUT * Math.pow(COMBO_MUSIC_OPEN / COMBO_MUSIC_CUT, tone), now, 0.15);
+  music.el.playbackRate = COMBO_MUSIC_RATE + (1 - COMBO_MUSIC_RATE) * tone;
 }
 
 /* ---------- grid spin (per-frame) ----------
