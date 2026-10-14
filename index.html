@@ -769,6 +769,127 @@ body.frenzy-mode #speedBtn.visible { display:block; }
 }
 #chillToggle.hidden { display: none; }
 
+/* ---------- Scroller mode toggle (initial level only) ---------- */
+#scrollerToggle {
+  position: fixed;
+  z-index: 40;
+  left: 20px;
+  top: calc(50% + 40px);
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 8px 10px;
+  background: #090d07;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: #8f9f80;
+  font: 11px monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .2s;
+}
+#scrollerToggle .chill-box {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px #55634a;
+  transition: background .2s, box-shadow .2s;
+}
+#scrollerToggle:hover { color: #c9d8b8; }
+#scrollerToggle[aria-pressed="true"] { color: var(--accent); }
+#scrollerToggle[aria-pressed="true"] .chill-box {
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+}
+#scrollerToggle.hidden { display: none; }
+#restartScroller { display:none; position:fixed; z-index:1200; left:50%; top:62%; transform:translate(-50%,-50%); padding:14px 22px; min-width:150px; color:#fff; background:#080b07; font-size:13px; letter-spacing:.12em; }
+#restartScroller.visible { display:block; }
+
+/* ---------- Difficulty selector ---------- */
+#diffPanel {
+  position: fixed;
+  z-index: 40;
+  left: 20px;
+  top: calc(50% + 86px);
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px;
+  background: #090d07;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: #8f9f80;
+  font: 11px monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  user-select: none;
+  width: max-content;
+  max-width: calc(100vw - 28px);
+}
+#diffPanel.hidden { display: none; }
+#diffPanel .diff-row { display: flex; align-items: center; gap: 8px; }
+#diffPanel .diff-label { flex: 1; color: #5f6f52; font-size: 9px; letter-spacing: .16em; }
+#diffPanel button {
+  padding: 0 4px;
+  min-width: 18px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: #8f9f80;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .15s;
+}
+#diffPanel button:hover:not(:disabled) { color: var(--accent); filter: none; }
+#diffPanel button:active:not(:disabled) { transform: none; box-shadow: none; }
+#diffPanel button:disabled { opacity: .3; cursor: not-allowed; }
+#diffPanel #diffValue {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 26px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+#diffPanel .diff-hint {
+  color: #5f6f52;
+  font-size: 9px;
+  letter-spacing: .06em;
+  text-transform: none;
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 620px) {
+  #diffPanel {
+    left: 14px;
+    padding: 6px 8px;
+    font-size: 10px;
+    letter-spacing: .08em;
+  }
+  #diffPanel .diff-label,
+  #diffPanel .diff-hint { font-size: 8px; }
+  #diffPanel #diffValue { font-size: 12px; }
+}
+
+/* Scroller mode draws its own full-screen canvas; the ordinary board is hidden meanwhile. */
+#scCanvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: none; pointer-events: none; }
+body.scroller-mode #scCanvas { display: block; }
+body.scroller-mode .board { display: none !important; }
+@media (max-width: 620px) {
+  #scrollerToggle { left: 14px; padding: 8px; font-size: 10px; letter-spacing: .08em; }
+}
+
 /* ---------- Combo flash + beat visualiser ---------- */
 #flash {
   position: fixed;
@@ -903,6 +1024,21 @@ body.frenzy-mode #speedBtn.visible { display:block; }
 <button id="chillToggle" type="button" aria-pressed="false">
   <span class="chill-box" aria-hidden="true"></span><span>Chill mode</span>
 </button>
+<button id="scrollerToggle" type="button" aria-pressed="false">
+  <span class="chill-box" aria-hidden="true"></span><span>Scroller mode</span>
+</button>
+
+<div id="diffPanel" role="group" aria-label="Difficulty">
+  <div class="diff-row">
+    <span class="diff-label">Difficulty</span>
+    <button id="diffDown" type="button" aria-label="Decrease difficulty">‹</button>
+    <span id="diffValue">1</span>
+    <button id="diffUp" type="button" aria-label="Increase difficulty">›</button>
+  </div>
+  <div class="diff-hint" id="diffHint">+1 value per level</div>
+</div>
+
+<button id="restartScroller" type="button">Main Level</button>
 
 <button id="newBtn" class="control-new" type="button">New level</button>
 <button id="speedBtn" type="button" aria-label="Speed up marble">Speed up »</button>
@@ -994,6 +1130,8 @@ const panel      = document.getElementById('panel');
 const board      = document.getElementById('board');
 const gridEl     = document.getElementById('grid');
 const chillToggle= document.getElementById('chillToggle');
+const scrollerToggle = document.getElementById('scrollerToggle');
+const restartScrollerBtn = document.getElementById('restartScroller');
 const pipeCanvas = document.createElement('canvas'); pipeCanvas.id = 'pipeCanvas';
 const pipeCtx = pipeCanvas.getContext('2d', { alpha: true, desynchronized: true });
 let canvasMode = false;
@@ -1008,6 +1146,13 @@ const comboFill  = document.getElementById('comboFill');
 let comboCount = 0, frenzy = false, speedMultiplier = 1, frenzyTimer = null, speedBoostTimer = null, speedBoostUntil = 0;
 const status     = document.getElementById('status');
 
+/* ---------- difficulty selector ---------- */
+const diffPanel   = document.getElementById('diffPanel');
+const diffValueEl = document.getElementById('diffValue');
+const diffHintEl  = document.getElementById('diffHint');
+const diffDownBtn = document.getElementById('diffDown');
+const diffUpBtn   = document.getElementById('diffUp');
+
 const chute  = Object.assign(document.createElement('div'), { className: 'chute' });
 const cup    = Object.assign(document.createElement('div'), { className: 'cup' });
 const marble = Object.assign(document.createElement('div'), { className: 'marble' });
@@ -1016,6 +1161,7 @@ let level = null, T = 60, M = 26;
 let lastRunPath = [];
 let busy = false, won = false, marbles = 0, runId = 0;
 let solvedTimeouts = [];
+let scrollerMode = false, sc = null;   // scroller mode state lives in the scroller section below
 
 /* ---------- helpers ---------- */
 const rnd = n => Math.floor(Math.random() * n);
@@ -1283,6 +1429,7 @@ function buildBoard() {
 }
 
 function drawCanvasBoard() {
+  if (scrollerMode) { if (sc) drawScroller(); return; }
   if (!canvasMode || !level) return;
   const ctx = pipeCtx, dpr = Math.min(1.5, window.devicePixelRatio || 1);
   const w = level.cols * T, h = level.rows * T;
@@ -1312,6 +1459,7 @@ function drawCanvasBoard() {
 }
 
 function fit() {
+  if (scrollerMode) { if (sc) fitScroller(); return; }
   if (!level) return;
   // Keep the maze as a stable world; camera controls change the view, not its geometry.
   T = window.innerWidth < 620 ? 44 : 60;
@@ -1336,15 +1484,19 @@ function updateCamera() {
   const label = document.getElementById('zoomLabel');
   if (label) label.textContent = Math.round(zoom * 100) + '%';
 }
-function changeZoom(mult) { zoom = Math.max(.15, Math.min(3.5, zoom * mult)); updateCamera(); }
+function changeZoom(mult) {
+  const lo = scrollerMode ? .3 : .15, hi = scrollerMode ? 2.4 : 3.5;
+  zoom = Math.max(lo, Math.min(hi, zoom * mult)); updateCamera();
+}
 document.getElementById('zoomIn').addEventListener('click', () => changeZoom(1.2));
 document.getElementById('zoomOut').addEventListener('click', () => changeZoom(1/1.2));
-document.getElementById('resetCamera').addEventListener('click', () => { cameraX=0; cameraY=0; zoom=1; updateCamera(); });
+document.getElementById('resetCamera').addEventListener('click', () => { if (scrollerMode) { if (sc) scResetCamera(); return; } cameraX=0; cameraY=0; zoom=1; updateCamera(); });
 const activePointers = new Map();
 let pinch = null;
 const pointDistance = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
 const pointMid = (a,b) => ({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
 panel.addEventListener('pointerdown', e => {
+  if (scrollerMode) return;   // scroller mode has its own camera drag
   activePointers.set(e.pointerId, {x:e.clientX,y:e.clientY});
   try { panel.setPointerCapture(e.pointerId); } catch (_) {}
   if (activePointers.size === 2) {
@@ -1461,7 +1613,42 @@ function previewDifficulty(value) {
   updateGlowGradient();
 }
 
+/* ---------- difficulty multiplier ----------
+   Difficulty sets how fast the run escalates:
+     · Normal mode  → boardValue advances by `difficulty` per cleared level.
+     · Scroller mode → each width expansion adds `difficulty` tiles.
+   Minimum 1, no maximum. Board *generation* is capped at BOARD_VALUE_CAP so
+   an absurd difficulty can't hang the page mid-generate; the badge flags
+   when the cap kicks in.
+
+   The panel is only shown on the menu board (boardValue === 4) and while a
+   Scroller run hasn't begun. Completing level 1 (which pushes boardValue
+   past 4) or dropping the first Scroller marble hides it — the choice has
+   been committed at that point. */
+let difficulty = 1;
+const BOARD_VALUE_CAP = 100;
+const generationValue = v => Math.min(v, BOARD_VALUE_CAP);
+
+function updateDiffHint() {
+  if (scrollerMode) {
+    diffHintEl.textContent = '+' + difficulty + ' tile' + (difficulty === 1 ? '' : 's') + ' per expansion';
+  } else {
+    diffHintEl.textContent = '+' + difficulty + ' value per level';
+  }
+}
+function setDifficulty(next) {
+  difficulty = Math.max(1, next);
+  diffValueEl.textContent = difficulty;
+  diffDownBtn.disabled = difficulty <= 1;
+  updateDiffHint();
+}
+diffDownBtn.addEventListener('click', () => setDifficulty(difficulty - 1));
+diffUpBtn.addEventListener('click', () => setDifficulty(difficulty + 1));
+updateDiffHint();
+
 function newLevel() {
+  if (scrollerMode) { buildScrollerMenu(); return; }
+  updateDiffHint();
   document.body.classList.remove('won');
   runId++;
   busy = false; won = false; marbles = 0; lastRunPath = [];
@@ -1476,22 +1663,36 @@ function newLevel() {
   board.classList.remove('busy');
   resetClock();
   marblesEl.textContent = '0';
-  const cfg = configForValue(boardValue);
+  const cfg = configForValue(generationValue(boardValue));
   previewDifficulty(boardValue);
-  level = generateLevel(cfg);
+  try {
+    level = generateLevel(cfg);
+  } catch (err) {
+    console.error('Level generation failed, falling back:', err);
+    level = generateLevel(configForValue(60));
+    status.textContent = 'Board generation fell back to a smaller size.';
+  }
   buildBoard();
   // Canvas pipes use a snapshot of the accent color, so repaint immediately on every level.
   drawCanvasBoard();
   cameraX = 0; cameraY = 0;
   zoom = Math.min(1, Math.max(.15, Math.min((innerWidth * .82) / (level.cols * T), (innerHeight * .72) / (level.rows * T))));
   updateCamera();
-  badge.textContent = 'VALUE ' + boardValue + '  ·  ' + level.cols + ' × ' + level.rows + '  ·  ' + level.holeCells + ' HOLES  ·  ' + level.lockedCells + ' LOCKED';
+  badge.textContent = 'DIFF ' + difficulty
+    + '  ·  VALUE ' + boardValue
+    + '  ·  ' + level.cols + ' × ' + level.rows
+    + '  ·  ' + level.holeCells + ' HOLES'
+    + '  ·  ' + level.lockedCells + ' LOCKED'
+    + (boardValue > BOARD_VALUE_CAP ? '  ·  SIZE CAPPED' : '');
   dropBtn.disabled = false;
   newBtn.classList.remove('primary');
   status.className = 'status';
   status.textContent = 'Rotate the tiles to build a route, then drop a marble.';
-  // Chill mode is a first-board-only option; once value climbs past 4 it is gone.
+  // Chill / scroller / difficulty are menu-board-only options: once value
+  // climbs past 4 they all disappear until the page is reloaded.
   chillToggle.classList.toggle('hidden', boardValue !== 4);
+  scrollerToggle.classList.toggle('hidden', boardValue !== 4);
+  diffPanel.classList.toggle('hidden', boardValue !== 4);
   // A new board wipes any stars still in flight.
   stars.length = 0; starSpawnAccum = 0;
   ambientStars.length = 0; ambientSpawnAccum = 0;
@@ -1507,11 +1708,12 @@ chillToggle.addEventListener('click', () => {
   chillToggle.setAttribute('aria-pressed', chillMode ? 'true' : 'false');
   status.className = 'status';
   status.textContent = chillMode
-    ? 'Chill mode on — combos never expire.'
+    ? (scrollerMode ? 'Chill mode on — combos never expire and the marble speeds up more slowly.' : 'Chill mode on — combos never expire.')
     : 'Chill mode off — combos expire on the timer.';
 });
 
 panel.addEventListener('click', e => {
+  if (scrollerMode) { scrollerClick(e); return; }
   if (!canvasMode || !level || busy || won || dragged || suppressTileClick) return;
   const w = board.offsetWidth, h = board.offsetHeight;
   // Undo translate, scale and grid rotation to get board-local pixels.
@@ -1578,6 +1780,7 @@ function buildRoute(sim) {
 function place(x, y) { marble.style.translate = (x - M / 2) + 'px ' + (y - M / 2) + 'px'; }
 
 function dropMarble() {
+  if (scrollerMode) { scrollerDrop(); return; }
   if (!level || busy || won) return;
   startClock();
   marbles++;
@@ -1671,7 +1874,10 @@ function finishRun(kind) {
     comboBar.classList.toggle('visible', frenzy);
     comboText.textContent = 'x' + comboCount + ' combo';
     comboFill.style.transform = 'scaleX(1)';
-    boardValue++;
+    boardValue += difficulty;
+    // The menu-board window has closed: hide the difficulty selector along
+    // with the other first-board-only options.
+    diffPanel.classList.add('hidden');
     document.body.classList.add('won');
     if (canvasMode) drawCanvasBoard();
     stopClock();
@@ -1719,6 +1925,567 @@ speedBtn.addEventListener('click', () => {
 });
 dropBtn.addEventListener('click', dropMarble);
 newBtn.addEventListener('click', newLevel);
+
+/* ---------- scroller mode ----------
+   An endless falling path instead of one board after another. The value-4
+   board is the menu: with "Scroller mode" ticked it becomes a straight line of
+   straight pipes, and the first drop starts the run. From then on the marble
+   never stops rolling; rows are generated ahead of it and the player rotates
+   tiles to keep the route connected. One mistake (dead end, hole, side wall,
+   loop, or backing out of the world) ends the run and the game returns to the
+   menu.
+
+   The camera is free. Nothing follows the marble: drag (or use the arrow keys
+   / WASD) to move around, wheel, pinch or the +/- buttons to zoom, and the
+   home button to snap back to the marble. The world is drawn on its own
+   full-screen canvas (#scCanvas) and respects the combo spin.
+
+   Every row is built around a guaranteed "spine": the route enters from the
+   top, may run sideways a few tiles, and leaves through the bottom into the top
+   of the next row. The spine tiles are then scrambled, so a row is always
+   solvable but never starts solved.
+
+   Glowing stars sit on random tiles (mostly on the route, some as bait just off
+   it). The marble collects one by rolling through the middle of its tile: each
+   adds one to the combo and a little permanent speed. The combo drains over
+   SC_COMBO_MS between stars; Chill mode makes it never drain and slows every
+   source of acceleration. The existing combo effects (music, spin, ambient
+   stars, glow) all run off comboCount, exactly as in the normal game.
+
+   Difficulty creeps up very slowly: speed grows a little per tile travelled and
+   per star, and later rows drift further sideways, arrive more scrambled and
+   gain decoy holes and locks. Positions are in tile units (1 = one tile). */
+const SC_VIEW_ROWS = 11;      // rows the default zoom fits on screen
+const SC_AHEAD = 16;          // rows generated beyond the deepest row the marble has reached
+const SC_KEEP_BEHIND = 6;     // rows kept behind it; the marble backing out past these ends the run
+const SC_RUNWAY = 10;         // straight rows before the first generated row
+const SC_BASE_SPEED = 2.0 / 2.5;   // original 2.0 tiles/s divided by 2.5
+const SC_SPEED_GAIN = 0.00035;  // very gentle speed increase per tile travelled
+const SC_STAR_SPEED = 0.015;  // small speed increase per star collected
+const SC_CHILL_ACCEL = 0.05;  // Chill mode uses only 5% of normal acceleration
+const SC_MAX_SPEED = 6.5;
+const SC_DEPTH_SPAN = 200;    // rows until row generation reaches full difficulty
+const SC_STAR_CHANCE = 0.32;  // stars are occasional, not a dominant visual
+const SC_STAR_ON_ROUTE = 0.7; // share of stars placed on the route (the rest are bait)
+const SC_COMBO_MS = 24000;    // longer combo window after each star (Chill: forever)
+const SC_PAN_PX = 560;        // keyboard pan speed, screen px per second
+const SC_BEST_KEY = 'marbleScrollerBest';
+const SC_MESSAGES = {
+  blocked: 'The marble hit a closed end.',
+  fall: 'The marble rolled off the side.',
+  hole: 'The marble dropped into a hole.',
+  loop: 'The marble went around in circles.',
+  void: 'The marble climbed back into the void.',
+};
+
+const scCanvas = Object.assign(document.createElement('canvas'), { id: 'scCanvas' });
+const scCtx = scCanvas.getContext('2d', { alpha: true });
+panel.appendChild(scCanvas);
+
+function scBest() { try { return +localStorage.getItem(SC_BEST_KEY) || 0; } catch (_) { return 0; } }
+function scSaveBest(v) { try { localStorage.setItem(SC_BEST_KEY, String(v)); } catch (_) {} }
+function scSpeed() {
+  const accel = SC_SPEED_GAIN * sc.tiles + sc.starSpeed;
+  return Math.min(SC_MAX_SPEED, SC_BASE_SPEED + accel * (chillMode ? SC_CHILL_ACCEL : 1));
+}
+
+/* ---- row generation ---- */
+function scNewCell() {
+  const roll = Math.random();
+  return { hole: false, locked: false, onPath: false, inUse: false, deg: 0, star: false, starPhase: 0,
+    type: roll < .45 ? 'curve' : roll < .8 ? 'straight' : 'cross', rot: rnd(4), solRot: 0 };
+}
+
+// Tile and pose that carry a marble in through side `enter` and out through side `exit`.
+function scRouteTile(enter, exit, crossChance) {
+  if ((enter + 2) % 4 === exit) {
+    const cross = Math.random() < crossChance;
+    return { type: cross ? 'cross' : 'straight', solRot: cross ? 0 : (enter % 2 === 0 ? 0 : 1) };
+  }
+  return { type: 'curve', solRot: (enter + 1) % 4 === exit ? enter : exit };
+}
+
+function scGenRow() {
+  const r = sc.genRow++, W = sc.cols, mid = Math.floor(W / 2);
+  const row = Array.from({ length: W }, scNewCell);
+  sc.rows.set(r, row);
+
+  if (r < SC_RUNWAY) {                       // the opening straight line: nothing else is drawn
+    row.forEach((cell, c) => { if (c !== mid) cell.hole = true; });
+    const t = row[mid];
+    t.type = 'straight'; t.rot = t.solRot = 0; t.onPath = true;
+    if (r === 3 || r === 6 || r === 8) { t.star = true; t.starPhase = Math.random() * 6.3; }   // a first taste of stars
+    sc.spineCol = mid;
+    return;
+  }
+
+  const diff = Math.min(1, (r - SC_RUNWAY) / SC_DEPTH_SPAN);
+  const c0 = sc.spineCol, maxDrift = Math.min(W - 1, 1 + Math.round(diff * 2));
+  let c1 = c0;
+  if (Math.random() > 0.4 - 0.3 * diff) {    // otherwise the spine drops straight down this row
+    const options = [];
+    for (let c = Math.max(0, c0 - maxDrift); c <= Math.min(W - 1, c0 + maxDrift); c++) if (c !== c0) options.push(c);
+    c1 = options[rnd(options.length)];
+  }
+  const dir = Math.sign(c1 - c0), sideOut = dir > 0 ? 1 : 3;
+  const spine = [];
+  const lay = (c, enter, exit) => {
+    const cell = row[c], rt = scRouteTile(enter, exit, .15);
+    cell.type = rt.type; cell.solRot = cell.rot = rt.solRot;
+    cell.onPath = true; cell.hole = false; cell.locked = false;
+    spine.push(cell);
+  };
+  if (dir === 0) lay(c0, 0, 2);
+  else {
+    lay(c0, 0, sideOut);
+    for (let c = c0 + dir; c !== c1; c += dir) lay(c, (sideOut + 2) % 4, sideOut);
+    lay(c1, (sideOut + 2) % 4, 2);
+  }
+  sc.spineCol = c1;
+
+  for (const cell of spine) {                // scramble the route so the row starts unsolved
+    if (cell.type === 'cross' || Math.random() > 0.5 + 0.4 * diff) continue;
+    cell.rot = cell.type === 'straight' ? cell.solRot ^ 1 : (cell.solRot + 1 + rnd(3)) % 4;
+  }
+  for (const cell of row) {                  // decoys off the route: later rows only
+    if (cell.onPath) continue;
+    if (Math.random() < 0.07 * diff) cell.hole = true;
+    else if (cell.type !== 'cross' && Math.random() < 0.08 * diff) cell.locked = true;
+  }
+
+  if (Math.random() < SC_STAR_CHANCE) {      // a glowing star on a random tile
+    let cell;
+    if (Math.random() < SC_STAR_ON_ROUTE) cell = spine[rnd(spine.length)];
+    else {
+      const free = row.filter(x => !x.hole && !x.onPath);
+      cell = free.length ? free[rnd(free.length)] : spine[rnd(spine.length)];
+    }
+    cell.star = true; cell.starPhase = Math.random() * 6.3;
+  }
+}
+
+function scEnsureRows() {
+  // Expand outward every 80 rows. Each event adds `difficulty` tiles, split
+  // as evenly as possible; an odd extra alternates sides so the spine stays
+  // centred over a long run.
+  while (sc.maxRow >= sc.nextWidthAt) {
+    const add = difficulty;
+    const leftAdd  = Math.floor(add / 2) + ((add % 2 === 1 && sc.expandFlip) ? 1 : 0);
+    const rightAdd = add - leftAdd;
+    const edge = () => ({ hole:true, locked:false, onPath:false, inUse:false,
+      deg:0, star:false, starPhase:0, type:'straight', rot:0, solRot:0 });
+    for (const row of sc.rows.values()) {
+      for (let i = 0; i < leftAdd;  i++) row.unshift(edge());
+      for (let i = 0; i < rightAdd; i++) row.push(edge());
+    }
+    sc.cols += add;
+    sc.m.c += leftAdd;
+    sc.spineCol += leftAdd;
+    sc.camX += leftAdd;
+    sc.nextWidthAt += 80;
+    if (add % 2 === 1) sc.expandFlip = !sc.expandFlip;
+  }
+  while (sc.genRow <= sc.maxRow + SC_AHEAD) scGenRow();
+  for (const k of sc.rows.keys()) if (k < sc.maxRow - SC_KEEP_BEHIND) sc.rows.delete(k);
+}
+
+/* ---- marble ---- */
+const scDir = side => ({ x: DC[side], y: DR[side] });
+function scMarblePos() {
+  const m = sc.m, cx = m.c + .5, cy = m.r + .5, a = scDir(m.enter);
+  const inX = cx + a.x * .5, inY = cy + a.y * .5;
+  if (m.s < 0) return { x: inX + a.x * -m.s, y: inY + a.y * -m.s };          // still arriving at the tile
+  if (m.s < .5) { const k = m.s / .5; return { x: inX + (cx - inX) * k, y: inY + (cy - inY) * k }; }
+  const b = scDir(m.exit), k = (m.s - .5) / .5, outX = cx + b.x * .5, outY = cy + b.y * .5;
+  return { x: cx + (outX - cx) * k, y: cy + (outY - cy) * k };
+}
+
+function scEnter() {
+  const m = sc.m;
+  const row = sc.rows.get(m.r);
+  if (!row) return scDie('void');
+  const cell = row[m.c];
+  if (cell.hole) return scDie('hole');
+  const key = m.r + ',' + m.c + ',' + m.enter;
+  if (sc.seen.has(key)) return scDie('loop');
+  sc.seen.add(key);
+  const open = openings(cell, cell.rot);
+  if (!open.includes(m.enter)) return scDie('blocked');
+  m.exit = cell.type === 'cross' ? (m.enter + 2) % 4 : open.find(s => s !== m.enter);
+  cell.inUse = true;                         // a tile cannot be rotated while the marble is in it
+  m.in = true;
+  if (m.r > sc.maxRow) sc.maxRow = m.r;
+}
+
+function scLeave() {
+  const m = sc.m, row = sc.rows.get(m.r);
+  if (row) row[m.c].inUse = false;
+  const nc = m.c + DC[m.exit];
+  if (nc < 0 || nc >= sc.cols) return scDie('fall');
+  m.r += DR[m.exit]; m.c = nc; m.enter = (m.exit + 2) % 4; m.s = 0; m.in = false;
+}
+
+// Stars are collected when the marble reaches the middle of their tile.
+function scTryStar() {
+  const m = sc.m, row = sc.rows.get(m.r);
+  if (!row || m.s < .5) return;
+  const cell = row[m.c];
+  if (!cell.star) return;
+  cell.star = false;
+  sc.stars++;
+  sc.starSpeed += SC_STAR_SPEED;
+  sc.bursts.push({ x: m.c + .5, y: m.r + .5, t: performance.now() });
+  comboCount++;
+  sc.comboLeft = SC_COMBO_MS;
+  comboText.textContent = 'x' + comboCount + ' combo';
+  comboFill.style.transform = 'scaleX(1)';
+  comboBar.classList.toggle('visible', comboCount >= 2);
+  syncComboMusic();
+  if (comboCount === COMBO_MUSIC_AT) flashScreen();
+}
+
+function scStep(dt) {
+  const m = sc.m;
+  let move = scSpeed() * dt / 1000;
+  while (move > 0 && !sc.dead) {
+    if (!m.in) {
+      const need = -m.s;
+      if (move < need) { m.s += move; move = 0; }
+      else { move -= need; m.s = 0; scEnter(); }
+    } else {
+      const left = 1 - m.s;
+      if (move < left) { m.s += move; sc.tiles += move; scTryStar(); move = 0; }
+      else { move -= left; sc.tiles += left; m.s = 1; scTryStar(); scLeave(); }
+    }
+  }
+}
+
+// One tick of game time: marble, combo timer, world generation.
+function scAdvance(dt) {
+  sc.elapsed += dt;
+  scStep(dt);
+  if (comboCount > 0 && !sc.dead) {
+    if (chillMode) comboFill.style.transform = 'scaleX(1)';
+    else {
+      sc.comboLeft -= dt;
+      comboFill.style.transform = 'scaleX(' + Math.max(0, sc.comboLeft / SC_COMBO_MS) + ')';
+      if (sc.comboLeft <= 0) clearCombo();
+    }
+  }
+  scEnsureRows();
+}
+
+function scDie(kind) {
+  if (sc.dead) return;
+  sc.dead = kind;
+  const m = sc.m;
+  if (kind === 'hole') { m.s = .5; m.exit = m.enter; }   // sink in the middle of the hole
+  sc.fx = { kind, t0: performance.now() };
+  clearCombo();
+  chillToggle.classList.remove('hidden');
+
+  timeEl.textContent = fmt(sc.elapsed);
+  const depth = sc.maxRow, prev = scBest(), isBest = depth > prev;
+  if (isBest) scSaveBest(depth);
+  status.className = 'status lose';
+  status.textContent = SC_MESSAGES[kind] + ' Depth ' + depth + '.';
+  restartScrollerBtn.classList.add('visible');
+  dropBtn.disabled = true;
+  levelRecap.textContent = 'DEPTH ' + depth + ' · ' + timeEl.textContent + ' · ' + sc.stars + (sc.stars === 1 ? ' STAR' : ' STARS')
+    + ' · BEST ' + Math.max(prev, depth) + (isBest ? ' · NEW BEST' : '');
+}
+
+/* ---- camera ---- */
+function scClampCamera() {
+  sc.camX = Math.max(0, Math.min(sc.cols, sc.camX));
+  sc.camY = Math.max(-6, Math.min(sc.genRow, sc.camY));
+}
+function scDefaultZoom() {
+  return Math.max(.6, Math.min(1.6, (innerWidth * .9) / (sc.cols * T), (innerHeight * .92) / (SC_VIEW_ROWS * T)));
+}
+// Zoom to the default and put the marble 30% of the way down the screen.
+function scResetCamera() {
+  zoom = scDefaultZoom();
+  updateCamera();
+  const p = scMarblePos();
+  sc.camX = sc.cols / 2;
+  sc.camY = p.y + .2 * innerHeight / (zoom * T);
+  scClampCamera();
+}
+// Move the view by a screen-space drag, undoing the combo spin.
+function scPan(dx, dy) {
+  const S = zoom * T, th = spinAngle * Math.PI / 180, cos = Math.cos(th), sin = Math.sin(th);
+  sc.camX -= (dx * cos + dy * sin) / S;
+  sc.camY -= (-dx * sin + dy * cos) / S;
+  scClampCamera();
+}
+
+const scPtrs = new Map(), scKeys = new Set();
+let scPinch = null, scMoved = false, scSuppress = false;
+panel.addEventListener('pointerdown', e => {
+  if (!scrollerMode || !sc) return;
+  scPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+  try { panel.setPointerCapture(e.pointerId); } catch (_) {}
+  if (scPtrs.size === 2) {
+    const [a, b] = [...scPtrs.values()];
+    scPinch = { dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+    scMoved = true;
+  }
+});
+panel.addEventListener('pointermove', e => {
+  const p = scPtrs.get(e.pointerId);
+  if (!scrollerMode || !sc || !p) return;
+  const nx = e.clientX, ny = e.clientY;
+  if (scPtrs.size >= 2 && scPinch) {
+    p.x = nx; p.y = ny;
+    const [a, b] = [...scPtrs.values()];
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    zoom = Math.max(.3, Math.min(2.4, scPinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / scPinch.dist));
+    updateCamera();
+    scPan(mx - scPinch.mx, my - scPinch.my);
+    scPinch.mx = mx; scPinch.my = my;
+    return;
+  }
+  if (!scMoved && Math.hypot(nx - p.sx, ny - p.sy) > 5) { scMoved = true; panel.classList.add('dragging'); }
+  if (scMoved) scPan(nx - p.x, ny - p.y);
+  p.x = nx; p.y = ny;
+});
+function scPointerEnd(e) {
+  if (!scPtrs.delete(e.pointerId)) return;
+  if (scPtrs.size < 2) scPinch = null;
+  for (const p of scPtrs.values()) { p.sx = p.x; p.sy = p.y; }
+  if (scPtrs.size === 0) {
+    panel.classList.remove('dragging');
+    if (scMoved) { scSuppress = true; setTimeout(() => { scSuppress = false; }, 80); }
+    scMoved = false;
+  }
+}
+panel.addEventListener('pointerup', scPointerEnd);
+panel.addEventListener('pointercancel', scPointerEnd);
+
+const SC_KEYMAP = { ArrowLeft: 'l', a: 'l', ArrowRight: 'r', d: 'r', ArrowUp: 'u', w: 'u', ArrowDown: 'd', s: 'd' };
+window.addEventListener('keydown', e => {
+  const k = SC_KEYMAP[e.key];
+  if (!scrollerMode || !k || e.ctrlKey || e.metaKey || e.altKey) return;
+  scKeys.add(k); e.preventDefault();
+});
+window.addEventListener('keyup', e => { const k = SC_KEYMAP[e.key]; if (k) scKeys.delete(k); });
+window.addEventListener('blur', () => scKeys.clear());
+function scKeyPan(dt) {
+  if (!scKeys.size) return;
+  const dx = (scKeys.has('l') ? 1 : 0) - (scKeys.has('r') ? 1 : 0);   // dragging right moves the view left
+  const dy = (scKeys.has('u') ? 1 : 0) - (scKeys.has('d') ? 1 : 0);
+  const len = Math.hypot(dx, dy) || 1;
+  scPan(dx / len * SC_PAN_PX * dt / 1000, dy / len * SC_PAN_PX * dt / 1000);
+}
+
+/* ---- drawing ---- */
+function scColor(l, a) { return 'hsla(' + accentH + ',' + accentS + '%,' + Math.min(94, accentL + l) + '%,' + a + ')'; }
+
+function scDrawStar(ctx, x, y, ph) {
+  const R = .12 * (.92 + .08 * Math.sin(ph * 4));
+  const g = ctx.createRadialGradient(x, y, 0, x, y, R * 2.1);
+  g.addColorStop(0, scColor(18, .28)); g.addColorStop(1, scColor(18, 0));
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, R * 2.1, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.72)';
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4 + ph * .4, rr = i % 2 ? R * .4 : R;
+    const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
+    if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+  }
+  ctx.closePath(); ctx.fill();
+}
+
+function drawScroller() {
+  const W = innerWidth, H = innerHeight, dpr = Math.min(1.5, window.devicePixelRatio || 1);
+  if (scCanvas.width !== Math.round(W * dpr) || scCanvas.height !== Math.round(H * dpr)) {
+    scCanvas.width = Math.round(W * dpr); scCanvas.height = Math.round(H * dpr);
+  }
+  const ctx = scCtx, S = zoom * T, now = performance.now(), t = now / 1000;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W / 2, H / 2); ctx.rotate(spinAngle * Math.PI / 180); ctx.scale(S, S); ctx.translate(-sc.camX, -sc.camY);
+
+  const rad = Math.hypot(W, H) / 2 / S + 1;
+  const r0 = Math.floor(sc.camY - rad), r1 = Math.ceil(sc.camY + rad);
+  ctx.lineWidth = .24; ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+  for (let r = r0; r <= r1; r++) {
+    const row = sc.rows.get(r);
+    if (!row) continue;
+    for (let c = 0; c < sc.cols; c++) {
+      const cell = row[c];
+      if (cell.hole) continue;
+      const cx = c + .5, cy = r + .5;
+      ctx.strokeStyle = cell.inUse ? '#fff' : cell.locked ? '#777d77' : sc.accent;
+      ctx.beginPath();
+      if (cell.type === 'cross') { ctx.moveTo(cx, r); ctx.lineTo(cx, r + 1); ctx.moveTo(c, cy); ctx.lineTo(c + 1, cy); }
+      else if (cell.type === 'straight') {
+        if (cell.rot % 2 === 0) { ctx.moveTo(cx, r); ctx.lineTo(cx, r + 1); } else { ctx.moveTo(c, cy); ctx.lineTo(c + 1, cy); }
+      } else {
+        const a = cell.rot % 4, b = (a + 1) % 4;
+        ctx.moveTo(cx + DC[a] * .5, cy + DR[a] * .5); ctx.lineTo(cx, cy); ctx.lineTo(cx + DC[b] * .5, cy + DR[b] * .5);
+      }
+      ctx.stroke();
+    }
+  }
+  for (let r = r0; r <= r1; r++) {           // stars sit on top of the pipes
+    const row = sc.rows.get(r);
+    if (!row) continue;
+    for (let c = 0; c < sc.cols; c++) if (row[c].star) scDrawStar(ctx, c + .5, r + .5, t + row[c].starPhase);
+  }
+
+  sc.bursts = sc.bursts.filter(b => now - b.t < 450);
+  for (const b of sc.bursts) {
+    const age = (now - b.t) / 450;
+    ctx.strokeStyle = scColor(26, 1 - age); ctx.lineWidth = .05;
+    ctx.beginPath(); ctx.arc(b.x, b.y, .2 + age * .8, 0, 6.2832); ctx.stroke();
+  }
+
+  const p = scMarblePos();
+  let scale = 1, alpha = 1;
+  if (sc.fx) {
+    const age = Math.min(1, (now - sc.fx.t0) / 300);
+    scale = sc.fx.kind === 'hole' ? 1 - age : (sc.fx.kind === 'fall' || sc.fx.kind === 'void') ? 1 - .2 * age : 1 + .8 * age;
+    alpha = 1 - age;
+  }
+  if (alpha > 0) {
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = sc.accent; ctx.shadowBlur = 12;
+    ctx.fillStyle = scColor(22, 1);
+    ctx.beginPath(); ctx.arc(p.x, p.y, 9 / S * scale, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function scUpdateBadge() {
+  badge.textContent = 'SCROLLER  ·  DIFF ' + difficulty + '  ·  ' + sc.cols + ' WIDE  ·  SPEED ' + scSpeed().toFixed(1) + '  ·  BEST ' + scBest() + (chillMode ? '  ·  CHILL' : '');
+}
+
+function fitScroller() {
+  T = window.innerWidth < 620 ? 44 : 60;
+  level.cols = sc.cols; level.rows = SC_VIEW_ROWS;      // the combo sky effects size themselves from `level`
+  updateCamera();
+}
+
+/* ---- menu, start and loop ---- */
+function buildScrollerMenu() {
+  runId++;                                   // cancels any ordinary marble still animating
+  busy = false; won = false; marbles = 0; lastRunPath = [];
+  document.body.classList.remove('won', 'frenzy-mode');
+  board.classList.remove('busy');
+  resetClock();
+  clearCombo();
+  previewDifficulty(boardValue);             // fresh accent colour for every run
+  const cols = 3;
+  level = { cols, rows: SC_VIEW_ROWS, start: { r: 0, c: 0 }, target: 0, cells: [] };   // stand-in for the sky effects
+  sc = { cols, rows: new Map(), genRow: 0, spineCol: Math.floor(cols / 2), nextWidthAt: 80, expandFlip: false,
+    camX: cols / 2, camY: 0, tiles: 0, maxRow: 0, elapsed: 0, seen: new Set(),
+    started: false, dead: null, hudAt: 0, lastDepth: -1, stars: 0, starSpeed: 0, comboLeft: 0, bursts: [], fx: null,
+    accent: 'hsl(' + accentH + ' ' + accentS + '% ' + accentL + '%)',
+    m: { r: 0, c: Math.floor(cols / 2), enter: 0, exit: 2, s: -.5, in: false } };
+  scEnsureRows();
+  T = window.innerWidth < 620 ? 44 : 60;
+  scResetCamera();
+
+  marblesEl.previousElementSibling.textContent = 'Depth';
+  marblesEl.textContent = '0';
+  dropBtn.disabled = false;
+  restartScrollerBtn.classList.remove('visible');
+  scrollerToggle.classList.remove('hidden');
+  chillToggle.classList.remove('hidden');
+  // The menu is the last chance to pick a difficulty: keep it visible here
+  // so a run can be configured before the first drop.
+  diffPanel.classList.remove('hidden');
+  newBtn.classList.remove('primary');
+  status.className = 'status';
+  status.textContent = 'Scroller mode: the camera is free — drag or use the arrow keys to pan, zoom as needed, and keep the route in view. Collect glowing stars for combo and speed.';
+  updateDiffHint();
+  scUpdateBadge();
+  scStartLoop();
+}
+
+function scStartLoop() {
+  const mine = sc;
+  let last = performance.now();
+  function frame(now) {
+    if (sc !== mine || !scrollerMode) return;
+    const dt = Math.min(50, now - last); last = now;
+    if (mine.started && !mine.dead) scAdvance(dt);
+    scKeyPan(dt);
+    if (mine.maxRow !== mine.lastDepth) { mine.lastDepth = mine.maxRow; marblesEl.textContent = mine.maxRow; }
+    if (now - mine.hudAt > 250) {
+      mine.hudAt = now;
+      if (mine.started && !mine.dead) timeEl.textContent = fmt(mine.elapsed);
+      scUpdateBadge();
+    }
+    drawScroller();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function scrollerDrop() {
+  if (!sc || sc.dead || sc.started) return;
+  sc.started = true;
+  scrollerToggle.classList.add('hidden');
+  restartScrollerBtn.classList.remove('visible');
+  dropBtn.disabled = true;
+  chillToggle.classList.add('hidden');       // chill is chosen before the run
+  diffPanel.classList.add('hidden');         // difficulty is locked in the moment the run begins
+  status.className = 'status';
+  status.textContent = 'Rotate the tiles ahead of the marble.';
+}
+
+function scrollerClick(e) {
+  if (!sc || sc.dead || scSuppress) return;
+  const S = zoom * T, th = spinAngle * Math.PI / 180, cos = Math.cos(th), sin = Math.sin(th);
+  const dx = e.clientX - innerWidth / 2, dy = e.clientY - innerHeight / 2;
+  const u = (dx * cos + dy * sin) / S + sc.camX, v = (-dx * sin + dy * cos) / S + sc.camY;
+  const c = Math.floor(u), r = Math.floor(v);
+  if (c < 0 || c >= sc.cols) return;
+  const row = sc.rows.get(r);
+  if (!row) return;
+  const cell = row[c];
+  if (cell.hole || cell.locked || cell.type === 'cross' || cell.inUse) return;
+  cell.rot = (cell.rot + 1) % 4;
+}
+
+restartScrollerBtn.addEventListener('click', () => {
+  if (!scrollerMode || !sc || !sc.dead) return;
+  // Return to the actual base-game Level 1 menu, with all mode controls restored.
+  scrollerMode = false;
+  scrollerToggle.setAttribute('aria-pressed', 'false');
+  scrollerToggle.classList.remove('hidden');
+  chillToggle.classList.remove('hidden');
+  document.body.classList.remove('scroller-mode');
+  scKeys.clear(); scPtrs.clear();
+  sc = null;
+  levelRecap.textContent = '';
+  marblesEl.previousElementSibling.textContent = 'Marbles';
+  restartScrollerBtn.classList.remove('visible');
+  updateDiffHint();
+  newLevel();
+});
+
+scrollerToggle.addEventListener('click', () => {
+  if (boardValue !== 4) return;              // like chill mode, only offered on the menu board
+  scrollerMode = !scrollerMode;
+  scrollerToggle.setAttribute('aria-pressed', scrollerMode ? 'true' : 'false');
+  document.body.classList.toggle('scroller-mode', scrollerMode);
+  levelRecap.textContent = '';
+  updateDiffHint();
+  if (scrollerMode) {
+    buildScrollerMenu();
+  } else {
+    clearCombo();
+    sc = null; scKeys.clear(); scPtrs.clear();
+    marblesEl.previousElementSibling.textContent = 'Marbles';
+    newLevel();
+  }
+});
 
 /* ---------- combo music ----------
    From combo 10 the track loops underneath the game. It arrives deliberately
